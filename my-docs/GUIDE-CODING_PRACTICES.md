@@ -15,7 +15,7 @@
   importabile in `Stocks_App` senza modifiche.
 - Il **frontend** React 19 usa TypeScript strict (`verbatimModuleSyntax`, `noUnusedLocals`,
   `noUnusedParameters`, `erasableSyntaxOnly`) e tipi generati automaticamente da OpenAPI.
-- I **piani di sviluppo** stanno in `../bt/plans/` — ogni feature nuova va prima discussa lì.
+- I **piani di sviluppo** stanno in `./plans/` — ogni feature nuova va prima discussa lì.
 
 Senza regole esplicite, è facile:
 1. Far crescere un componente oltre le 300 righe (es. `TreeEditor.tsx` che accumula drag, render,
@@ -43,7 +43,7 @@ Senza regole esplicite, è facile:
 | Frontend | openapi-typescript | `^7.0.0` | Genera `src/types/bt.ts` da `/openapi.json` |
 
 **Porte**: BE `:8001`, FE `:3001` (proxy `/*` → `:8001`).
-**Piani**: `../bt/plans/` — leggere prima di sviluppare.
+**Piani**: `./plans/` — leggere prima di sviluppare.
 
 ---
 
@@ -307,10 +307,10 @@ frontend/src/
 
 ## Checklist per nuove feature
 
-Quando inizi una nuova feature (riferisciti sempre a `../bt/plans/` per il piano corrispondente),
+Quando inizi una nuova feature (riferisciti sempre a `./plans/` per il piano corrispondente),
 rispondi a queste domande **prima** di scrivere codice:
 
-1. ☐ Il piano esiste in `../bt/plans/`? → Se no, crealo prima.
+1. ☐ Il piano esiste in `./plans/`? → Se no, crealo prima.
 2. ☐ Questa logica appartiene a un dominio esistente? → Va nel suo hook/service esistente.
 3. ☐ Questa logica è un dominio nuovo? → Nuovo hook (`hooks/useXxx.ts`) + nuovo service se BE.
 4. ☐ La nuova UI è autonoma? → Nuovo componente in `components/`.
@@ -363,6 +363,6 @@ Copia questa sezione e consegnala al tuo LLM all'inizio di una sessione di svilu
 10. **Zustand per stato condiviso**. Se 2+ componenti leggono lo stesso dato,
     usa `create<BtState>()` in `src/bt/store/btStore.ts`, non useState alzati a App.tsx.
 
-11. **Piani in `../bt/plans/`**. Prima di sviluppare, leggi il piano corrispondente.
+11. **Piani in `./plans/`**. Prima di sviluppare, leggi il piano corrispondente.
     Se non esiste, crealo prima di scrivere codice.
 ```

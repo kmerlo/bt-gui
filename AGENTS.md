@@ -91,6 +91,7 @@ git push origin master
 
 - Mai fare `git checkout -b feat/…` né `git push origin feat/…`.
 - Le PR sono facoltative se l'utente le richiede; di default push diretto su `master`.
+- **Al termine di ogni piano (DONE)**: oltre al commit locale esegui subito `git push origin master` — non lasciare commit locali non pushati. Regola valida per `bt-gui` ed anche per `Stocks_App` quando il piano tocca entrambi i repo (commit + push separati).
 - Rimuovi branch vecchi rimasti solo per retro-compatibilità: `git branch -d feat/003-tree-algo feat/004-data-runner-results; git push origin --delete feat/…`.
 
 ## 7. Stile agente
