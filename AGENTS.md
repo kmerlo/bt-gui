@@ -77,7 +77,23 @@ npm run gen:types  # rigenera src/types/bt.ts (BE su :8001)
 - Piani in `../bt/plans/`: `001-bootstrap` → `005-integration-stocks-app`. Segui l'ordine, rispetta STOP conditions e Done criteria.
 - `APIRouter(prefix="/api/bt")` è il contratto con `Stocks_App` (plan 005 lo monta senza modifiche).
 
-## 6. Stile agente
+## 6. Git & release
+
+**Trunk-based** (come `Stocks_App`): lavoro sempre su `master`, nessun branch `feat/*`.
+
+```bash
+# Prima di ogni task
+git checkout master && git pull origin master
+
+# Dopo commit locale, integro subito
+git push origin master
+```
+
+- Mai fare `git checkout -b feat/…` né `git push origin feat/…`.
+- Le PR sono facoltative se l'utente le richiede; di default push diretto su `master`.
+- Rimuovi branch vecchi rimasti solo per retro-compatibilità: `git branch -d feat/003-tree-algo feat/004-data-runner-results; git push origin --delete feat/…`.
+
+## 7. Stile agente
 
 - Risposte brevi, fattuali; cita `file:line` per funzioni-simbolo.
 - Verifica con esecuzione (`pytest`, `npm run build`) prima di dichiarare done.

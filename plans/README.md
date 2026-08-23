@@ -25,6 +25,13 @@ Status values: `TODO` | `IN PROGRESS` | `DONE` | `BLOCKED` (with reason) | `REJE
 
 Execute in order 001→005. Do not skip 002 even if FE-only work seems possible — serializer is the contract.
 
+## Git workflow (trunk-based, come Stocks_App)
+
+- Lavoro sempre su `master`, nessun branch `feat/*`.
+- `git pull origin master` prima di ogni task, `git push origin master` dopo il commit locale.
+- PR manuali facoltative se l'utente le richiede; di default push diretto su `master`.
+- Rimuovere branch vecchi quando completati: `git branch -d feat/… && git push origin --delete feat/…`.
+
 ## Plan files
 
 - `plans/SPEC.md` — spec variante A (React19+Vite, repo separato, uv)
