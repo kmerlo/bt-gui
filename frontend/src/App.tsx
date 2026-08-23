@@ -1,5 +1,8 @@
 import { useState } from 'react'
 import BuilderView from './bt/components/BuilderView'
+import DataManager from './bt/components/DataManager'
+import ResultsDashboard from './bt/components/ResultsDashboard'
+import RunDialog from './bt/components/RunDialog'
 import { btApi } from './api/bt'
 
 type View = 'builder' | 'results' | 'strategies' | 'data' | 'settings'
@@ -7,6 +10,7 @@ type View = 'builder' | 'results' | 'strategies' | 'data' | 'settings'
 export default function App() {
   const [view, setView] = useState<View>('builder')
   const [health, setHealth] = useState('')
+  const [runId, setRunId] = useState<number | null>(null)
 
   const handleHealth = () => {
     btApi
@@ -45,8 +49,25 @@ export default function App() {
         </button>
         {health && <span>→ {health}</span>}
       </nav>
-      {view === 'builder' && <BuilderView />}
-      {view !== 'builder' && <div>view: {view} — scaffold OK</div>}
+      {view === 'builder' && (
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+          <div style={{ flex: 1 }}>
+            <BuilderView />
+          </div>
+          <div style={{ width: 340, minWidth: 300 }}>
+            <RunDialog
+              onRunCreated={(id) => {
+                setRunId(id)
+                setView('results')
+              }}
+            />
+          </div>
+        </div>
+      )}
+      {view === 'results' && <ResultsDashboard runId={runId} />}
+      {view === 'data' && <DataManager />}
+      {view === 'strategies' && <div>strategies — use Builder save/load</div>}
+      {view === 'settings' && <div>settings — scaffold OK</div>}
     </div>
   )
 }

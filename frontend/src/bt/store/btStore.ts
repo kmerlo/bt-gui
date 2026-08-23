@@ -71,11 +71,17 @@ function insertAtRec(
   return { ...node, children: node.children.map((c) => insertAtRec(c, parentId, child, index)) }
 }
 
+type RunMeta = { id: number; strategy_id: number | null; stats: Record<string, unknown> | null }
+
 type BtStore = {
   tree: StrategyTree | null
   selectedId: string | null
+  runs: RunMeta[]
+  selectedRunId: number | null
   setTree: (t: StrategyTree) => void
   setSelected: (id: string | null) => void
+  setRuns: (r: RunMeta[]) => void
+  setSelectedRun: (id: number | null) => void
   updateNode: (id: string, patch: Partial<NodeConfig>) => void
   addChild: (parentId: string, node: NodeConfig) => void
   removeNode: (id: string) => void
@@ -85,8 +91,12 @@ type BtStore = {
 export const useBtStore = create<BtStore>((set, get) => ({
   tree: null,
   selectedId: null,
+  runs: [],
+  selectedRunId: null,
   setTree: (tree) => set({ tree }),
   setSelected: (selectedId) => set({ selectedId }),
+  setRuns: (runs) => set({ runs }),
+  setSelectedRun: (selectedRunId) => set({ selectedRunId }),
   updateNode: (id, patch) => {
     const { tree } = get()
     if (!tree) return

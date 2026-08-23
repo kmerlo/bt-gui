@@ -37,3 +37,33 @@ export const algosApi = {
   list: () => request<AlgoMeta[]>('/api/bt/algos'),
   schema: (name: string) => request<AlgoSchema>(`/api/bt/algos/${encodeURIComponent(name)}/schema`),
 }
+
+export type DataSourceRow = { id: number; name: string; type: string; source: string; meta: Record<string, unknown>; path_or_tickers: string }
+
+export const dataApi = {
+  list: () => request<DataSourceRow[]>('/api/bt/data-sources'),
+  upload: (name: string, type: string, file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return fetch(`${API_BASE}/api/bt/data-sources/upload?name=${encodeURIComponent(name)}&type=${type}`, { method: 'POST', body: fd }).then(async (r) => {
+      if (!r.ok) throw new Error(await r.text())
+      return r.json() as Promise<{ id: number; name: string; meta: Record<string, unknown> }>
+    })
+  },
+  fetchFfn: (name: string, type: string, tickers: string[], start: string, end: string) =>
+    request<{ id: number; name: string; meta: Record<string, unknown> }>('/api/bt/data-sources/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ name, type, tickers, start, end }),
+    }),
+  preview: (id: number) => request<{ columns: string[]; rows: Record<string, unknown>[]; shape: number[] }>(`/api/bt/data-sources/${id}/preview`),
+}
+
+export type RunRow = { id: number; strategy_id: number | null; stats: Record<string, unknown> | null; config: Record<string, unknown>; created_at: string }
+
+export const backtestApi = {
+  create: (req: unknown) => request<{ id: number; status: string }>('/api/bt/backtest', { method: 'POST', body: JSON.stringify(req) }),
+  listRuns: () => request<RunRow[]>('/api/bt/runs'),
+  getRun: (id: number) => request<RunRow & { transactions?: unknown[] }>(`/api/bt/runs/${id}`),
+  getPrices: (id: number) => request<{ dates: string[]; values: number[]; weights: Record<string, number[]> }>(`/api/bt/runs/${id}/prices`),
+  wsProgress: (id: number) => new WebSocket(`${WS_BASE}/api/bt/backtest/${id}/progress`),
+}
