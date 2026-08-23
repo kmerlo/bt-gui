@@ -2,8 +2,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.routes import router as bt_router
+from backend.database import init_db
 
 app = FastAPI(title="bt-gui", version="0.1.0")
+
+
+@app.on_event("startup")
+def _init_db():
+    init_db()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3001", "http://localhost:5173"],
