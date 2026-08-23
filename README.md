@@ -30,6 +30,17 @@ npm run build   # tsc -b && vite build
 
 ## Integrazione Stocks_App
 
+`bt-gui` è integrato in `Stocks_App` come view `bt-builder` (`#bt-builder`):
+
+- **BE (opzione A, singolo processo)**: `Stocks_App/backend/main.py` prova `from bt_gui.api.routes import router as bt_router; app.include_router(bt_router)` — richiede `bt_gui` installato; se manca, fallback su opzione B.
+- **BE (opzione B, proxy, 1 riga)**: `Stocks_App/frontend/vite.config.ts` proxya `/api/bt → http://localhost:8001` (bt-gui BE). Nessuna modifica BE Stocks_App.
+- **FE**: copiati `frontend/src/api/bt.ts`, `frontend/src/types/bt.ts`, `frontend/src/bt/` (store + componenti `BuilderView`, `TreeEditor`, `AlgoStack`, `NodeInspector`, `DataManager`, `ResultsDashboard`, `RunDialog`), deps `zustand` + `@dnd-kit/*` (`lightweight-charts` già presente). `navItems.ts` + `App.tsx` (`ViewId='bt-builder'` + `renderView` case).
+- **CORS**: `bt-gui/backend/main.py` permette `http://localhost:3000` (Stocks_App FE) oltre a `:3001`.
+
+Verifica: `curl http://127.0.0.1:8001/api/bt/health` → `{"status":"ok"}`; `npm run build` in `Stocks_App/frontend` → exit 0; apri `http://localhost:3000/#bt-builder` → palette/tree/inspector + Run → Results.
+
+Piani: `plans/005-integration-stocks-app.md`. `bt-gui` resta repo standalone — copia one-way in Stocks_App.
+
 Vedi `../bt/plans/005-integration-stocks-app.md` — `APIRouter(prefix="/api/bt")` importabile con `app.include_router(bt_router)`.
 
 ## Spec

@@ -6,7 +6,7 @@
 ## 0. Lettura obbligatoria
 
 1. `my-docs/GUIDE-CODING_PRACTICES.md` — best practice, stack, soglie, checklist (11 regole + separazione stato/logica/UI)
-2. `../bt/plans/SPEC.md` + piano corrente in `../bt/plans/00*` — cosa costruire e done criteria
+2. `./plans/SPEC.md` + piano corrente in `./plans/00*` — cosa costruire e done criteria
 3. `frontend/tsconfig.app.json` + `pyproject.toml` — vincoli strict verificabili da build/lint
 
 Non iniziare a scrivere codice se non hai letto (1). Ogni PR/task che viola la guida verrà rifiutata.
@@ -23,7 +23,7 @@ Non iniziare a scrivere codice se non hai letto (1). Ogni PR/task che viola la g
 | Editor | `@monaco-editor/react ^4.7` | `simple_fn` |
 | Types | `openapi-typescript ^7` | genera `frontend/src/types/bt.ts` da `/openapi.json` |
 
-Porte: BE `:8001`, FE `:3001` (proxy `/api` → `:8001`). Piani: `../bt/plans/`.
+Porte: BE `:8001`, FE `:3001` (proxy `/api` → `:8001`). Piani: `./plans/`.
 
 ## 2. Regole d'oro (estratto — vedi guida per dettagli)
 
@@ -37,7 +37,7 @@ Porte: BE `:8001`, FE `:3001` (proxy `/api` → `:8001`). Piani: `../bt/plans/`.
 8. **`const` di default** — `let` solo se riassegnato (TS strict lo impone).
 9. **Ref last resort** — passa dati come parametri o leggi dallo store, non `useRef` globale.
 10. **Route sempre sotto `/api/bt`** — `backend/api/routes.py: APIRouter(prefix="/api/bt")`; mai route in `main.py`.
-11. **Piani prima del codice** — verifica `../bt/plans/` esista; se manca, crealo prima di codificare.
+11. **Piani prima del codice** — verifica `./plans/` esista; se manca, crealo prima di codificare.
 
 Checklist completa per nuove feature nella guida cap. "Checklist per nuove feature" — spunta tutti i 10 punti prima di aprire PR.
 
@@ -74,7 +74,7 @@ npm run gen:types  # rigenera src/types/bt.ts (BE su :8001)
 
 ## 5. Piani & integrazione
 
-- Piani in `../bt/plans/`: `001-bootstrap` → `005-integration-stocks-app`. Segui l'ordine, rispetta STOP conditions e Done criteria.
+- Piani in `./plans/`: `001-bootstrap` → `005-integration-stocks-app`. Segui l'ordine, rispetta STOP conditions e Done criteria.
 - `APIRouter(prefix="/api/bt")` è il contratto con `Stocks_App` (plan 005 lo monta senza modifiche).
 
 ## 6. Git & release
