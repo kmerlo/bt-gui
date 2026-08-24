@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { dataApi, type DataSourceRow } from '../../api/bt'
 
-const S = {
+  const S = {
   wrap: { padding: 12, color: '#c9d1d9' } as const,
   table: { borderCollapse: 'collapse', width: '100%', fontSize: 13 } as const,
   th: { border: '1px solid #30363d', padding: 6, background: '#161b22', textAlign: 'left' } as const,
@@ -9,6 +9,8 @@ const S = {
   input: { background: '#0d1117', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, padding: '6px 8px' } as const,
   btn: { background: '#21262d', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, padding: '6px 10px', cursor: 'pointer' } as const,
   row: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 } as const,
+  msgOk: { fontSize: 12, color: '#3fb950', marginBottom: 8 } as const,
+  msgErr: { fontSize: 12, color: '#f85149', marginBottom: 8 } as const,
 }
 
 export default function DataManager() {
@@ -47,20 +49,27 @@ export default function DataManager() {
   }
 
   const handleFetch = async () => {
-    if (!name) {
-      setMsg('name required')
-      return
-    }
     const t = tickers
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean)
+    if (!name.trim()) {
+      setMsg(`name required (got "${name}")`)
+      return
+    }
+    if (t.length === 0) {
+      setMsg('tickers required (e.g. AAPL,MSFT)')
+      return
+    }
     try {
-      await dataApi.fetchFfn(name, dtype, t, start, end)
-      setMsg(`fetched ${name}`)
+      const r = await dataApi.fetchFfn(name.trim(), dtype, t, start, end)
+      const meta = r.meta as Record<string, unknown>
+      const shape = meta.shape as number[] | undefined
+      const rows = shape ? String(shape[0]) : '?'
+      setMsg(`[ok] fetched ${r.name}  (${rows} rows)`)
       refresh()
     } catch (e) {
-      setMsg(String(e))
+      setMsg(`[err] ${String(e)}`)
     }
   }
 
@@ -77,7 +86,7 @@ export default function DataManager() {
     <div style={S.wrap}>
       <h3 style={{ margin: '0 0 12px' }}>Data Manager</h3>
       <div style={S.row}>
-        <input style={S.input} placeholder="name" value={name} onChange={(e) => setName(e.target.value)} />
+        <input style={S.input} placeholder="name *" value={name} onChange={(e) => setName(e.target.value)} />
         <select style={S.input} value={dtype} onChange={(e) => setDtype(e.target.value)}>
           <option value="price">price</option>
           <option value="volume">volume</option>
@@ -97,7 +106,7 @@ export default function DataManager() {
           Fetch FFN
         </button>
       </div>
-      {msg && <div style={{ fontSize: 12, color: '#8b949e', marginBottom: 8 }}>{msg}</div>}
+      {msg && <div style={msg.startsWith('[ok]') ? S.msgOk : S.msgErr}>{msg}</div>}
       <table style={S.table}>
         <thead>
           <tr>

@@ -18,9 +18,7 @@ Avvia il backend e frontend di bt-gui come processi separati.
 ```bash
 cd /home/roberto/Documents/progetti/bt-gui
 uv sync                                    # installa dipendenze se necessario
-uv run uvicorn backend.main:app \
-    --host 127.0.0.1 --port 8001 \
-    --reload                               #热重载 in sviluppo
+uv run uvicorn backend.main:app --host 127.0.0.1 --port 8001  --reload                               #热重载 in sviluppo
 ```
 
 Il server avvia e crea automaticamente `bt_gui.db` (SQLite). Verifica:
