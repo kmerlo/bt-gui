@@ -58,7 +58,9 @@ function NodeItem({ node, depth }: { node: NodeConfig; depth: number }) {
           ⋮⋮
         </span>
         <span style={{ flex: 1, fontWeight: 600, fontSize: 13, color: '#c9d1d9' }}>{node.name}</span>
-        <span style={S.badge}>{node.type}</span>
+        <span style={{ ...S.badge, background: selected ? '#1f6feb' : '#21262d', color: selected ? '#fff' : '#8b949e' }}>
+          {node.type}
+        </span>
         {isStrategy && node.algos.length > 0 && <span style={S.badge}>{node.algos.length} algos</span>}
       </div>
       {isStrategy ? (

@@ -109,6 +109,23 @@ export default function NodeInspector() {
         {paramsErr && <span style={{ color: '#f85149', fontSize: 12 }}>{paramsErr}</span>}
       </label>
 
+      {!isStrategy && (
+        <div style={{ background: '#1f2937', border: '1px solid #30363d', borderRadius: 6, padding: '8px 10px', fontSize: 12, color: '#8b949e', lineHeight: 1.5 }}>
+          <div style={{ fontWeight: 600, color: '#c9d1d9', marginBottom: 4 }}>
+            🔍 {node.type === 'Security' ? 'Nodo Security' : 'Tipo nodo'}
+          </div>
+          <div>L'Algo Stack appare solo per nodi di tipo <strong>Strategy</strong> o <strong>FixedIncomeStrategy</strong>.</div>
+          <div style={{ marginTop: 6 }}>
+            <span style={{ color: '#58a6ff', cursor: 'pointer' }} onClick={() => {
+              const rootId = tree.root.id
+              if (rootId) useBtStore.getState().setSelected(rootId)
+            }}>
+              ↑ Clicca "MyStrategy" nell'albero per modificare l'Algo Stack
+            </span>
+          </div>
+        </div>
+      )}
+
       {isStrategy && (
         <>
           <div style={{ borderTop: '1px solid #21262d', margin: '4px 0' }} />
@@ -117,6 +134,12 @@ export default function NodeInspector() {
           <div style={S.label}>children: {node.children.length}</div>
         </>
       )}
+
+      <div style={{ borderTop: '1px solid #21262d', margin: '4px 0' }} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={S.label}>Figli: {node.children.length}</span>
+        <span style={S.label}>Id: {(node.id ?? '').slice(0, 8)}</span>
+      </div>
 
       {!isRoot && node.id && (
         <button
