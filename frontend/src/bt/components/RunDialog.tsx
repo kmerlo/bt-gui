@@ -17,6 +17,7 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
   const [integerPos, setIntegerPos] = useState(false)
   const [simpleFn, setSimpleFn] = useState('')
   const [sources, setSources] = useState<DataSourceRow[]>([])
+  const [indicators, setIndicators] = useState<DataSourceRow[]>([])
   const [msg, setMsg] = useState('')
   const [progress, setProgress] = useState(0)
   const [running, setRunning] = useState(false)
@@ -24,7 +25,10 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
   useEffect(() => {
     dataApi
       .list()
-      .then(setSources)
+      .then((rows) => {
+        setSources(rows)
+        setIndicators(rows.filter((r) => r.type === 'indicator'))
+      })
       .catch(() => {
         /* ignore */
       })
@@ -65,7 +69,7 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
       commission: { type: 'simple', simple_fn: simpleFn || null },
     }
     try {
-      const res = await backtestApi.create({ tree, config, price_source_id: Number(priceId), extra_source_ids: {} })
+      const res = await backtestApi.create({ tree, config, price_source_id: Number(priceId), extra_source_ids: {}, indicator_source_ids: indicators.map((i) => i.id) })
       const id = res.id
       onRunCreated?.(id)
       setMsg(`run #${id} started`)

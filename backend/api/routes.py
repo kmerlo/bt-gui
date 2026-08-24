@@ -15,6 +15,7 @@ from backend.models.backtest_config import BacktestConfig
 from backend.models.strategy_tree import StrategyTree
 from backend.services.algo_registry import REGISTRY, algo_json_schema
 from backend.services.data_loader import fetch_ffn, load_csv, load_parquet
+from backend.services.indicator_calculator import compute_indicator, get_indicator_defs
 from backend.services.persistence import delete_strategy, get_strategy, list_strategies, save_strategy, update_strategy
 from backend.services.tree_serializer import to_bt_strategy
 
@@ -204,6 +205,68 @@ def preview_data_source(sid: int, limit: int = 5, db: Session = Depends(get_db))
     return {"columns": list(df.columns), "rows": rows, "shape": list(df.shape)}
 
 
+# ---- Indicator routes ----
+
+
+class ComputeIndicatorRequest(BaseModel):
+    price_source_id: int
+    type: str
+    params: dict[str, Any] = {}
+    save: bool = True
+    name: str | None = None  # optional custom name; auto-generated if not provided
+
+
+@router.get("/indicators")
+def list_indicators(db: Session = Depends(get_db)):  # noqa: B008
+    rows = db.query(DBSource).filter(DBSource.type == "indicator").order_by(DBSource.id.desc()).all()
+    return [{"id": r.id, "name": r.name, "type": r.type, "source": r.source, "meta": r.meta_json, "path_or_tickers": r.path_or_tickers} for r in rows]
+
+
+@router.get("/indicators/defs")
+def list_indicator_defs():
+    return get_indicator_defs()
+
+
+@router.post("/indicators/compute", status_code=201)
+def compute_indicator_route(req: ComputeIndicatorRequest, db: Session = Depends(get_db)):  # noqa: B008
+    prow = db.query(DBSource).filter(DBSource.id == req.price_source_id).first()
+    if prow is None:
+        raise HTTPException(status_code=404, detail="price source not found")
+    if prow.parquet_blob is None:
+        raise HTTPException(status_code=422, detail="price source has no data")
+    price_df = _blob_to_df(prow.parquet_blob)
+    price_df.index = pd.to_datetime(price_df.index)
+    try:
+        result, meta = compute_indicator(req.type, price_df, req.params)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    meta["indicator_type"] = req.type
+    meta["params"] = req.params
+    if not req.save:
+        # Return computed result without saving — only meta + shape
+        shape = list(result.shape) if isinstance(result, pd.DataFrame) else None
+        return {"meta": meta, "shape": shape}
+    # Save computed indicator as a DataSource
+    if req.name:
+        fname = req.name
+    else:
+        fname = f"indicator_{req.type}_{meta['params'].get('period', '')}"
+    df_out = result if isinstance(result, pd.DataFrame) else next(iter(result.values()))
+    blob = _df_to_blob(df_out)
+    row = DBSource(
+        name=fname,
+        type="indicator",
+        source="computed",
+        path_or_tickers=str(prow.id),
+        meta_json=meta,
+        parquet_blob=blob,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {"id": row.id, "name": row.name, "meta": meta}
+
+
 # ---- Backtest routes (imported lazily to avoid circular) ----
 
 
@@ -213,6 +276,7 @@ class RunRequest(BaseModel):
     config: BacktestConfig = BacktestConfig()  # type: ignore[call-arg]
     price_source_id: int
     extra_source_ids: dict[str, int] = {}
+    indicator_source_ids: list[int] = []
 
 
 @router.post("/backtest", status_code=201)
@@ -261,8 +325,17 @@ def create_backtest(req: RunRequest, db: Session = Depends(get_db)):  # noqa: B0
             volatility = df
         else:
             additional[k] = df
+    # Load indicator dataframes for algo param resolution
+    indicators: dict[str, pd.DataFrame] = {}
+    for ind_id in req.indicator_source_ids:
+        ind_row = db.query(DBSource).filter(DBSource.id == ind_id).first()
+        if ind_row is None or ind_row.parquet_blob is None:
+            continue
+        ind_df = _blob_to_df(ind_row.parquet_blob)
+        ind_df.index = pd.to_datetime(ind_df.index)
+        indicators[str(ind_id)] = ind_df
     try:
-        schedule_backtest(run_id, tree, req.config, price_df, additional, volume, volatility)
+        schedule_backtest(run_id, tree, req.config, price_df, additional, volume, volatility, indicators)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
     return {"id": run_id, "status": "running"}

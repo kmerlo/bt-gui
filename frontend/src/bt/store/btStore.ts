@@ -78,10 +78,12 @@ type BtStore = {
   selectedId: string | null
   runs: RunMeta[]
   selectedRunId: number | null
+  showIndicators: boolean
   setTree: (t: StrategyTree) => void
   setSelected: (id: string | null) => void
   setRuns: (r: RunMeta[]) => void
   setSelectedRun: (id: number | null) => void
+  toggleIndicators: () => void
   updateNode: (id: string, patch: Partial<NodeConfig>) => void
   addChild: (parentId: string, node: NodeConfig) => void
   removeNode: (id: string) => void
@@ -93,10 +95,12 @@ export const useBtStore = create<BtStore>((set, get) => ({
   selectedId: null,
   runs: [],
   selectedRunId: null,
+  showIndicators: false,
   setTree: (tree) => set({ tree }),
   setSelected: (selectedId) => set({ selectedId }),
   setRuns: (runs) => set({ runs }),
   setSelectedRun: (selectedRunId) => set({ selectedRunId }),
+  toggleIndicators: () => set((s) => ({ showIndicators: !s.showIndicators })),
   updateNode: (id, patch) => {
     const { tree } = get()
     if (!tree) return

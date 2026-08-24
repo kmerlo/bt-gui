@@ -40,6 +40,18 @@ export const algosApi = {
 
 export type DataSourceRow = { id: number; name: string; type: string; source: string; meta: Record<string, unknown>; path_or_tickers: string }
 
+export type IndicatorDef = {
+  type: string
+  display: string
+  params: { name: string; type: string; default: unknown }[]
+  output_key: string
+}
+
+export type IndicatorMeta = {
+  indicator_type: string
+  params: Record<string, unknown>
+}
+
 export const dataApi = {
   list: () => request<DataSourceRow[]>('/api/bt/data-sources'),
   upload: (name: string, type: string, file: File) => {
@@ -56,6 +68,13 @@ export const dataApi = {
       body: JSON.stringify({ name, type, tickers, start, end }),
     }),
   preview: (id: number) => request<{ columns: string[]; rows: Record<string, unknown>[]; shape: number[] }>(`/api/bt/data-sources/${id}/preview`),
+  listIndicators: () => request<DataSourceRow[]>('/api/bt/indicators'),
+  computeIndicator: (req: { price_source_id: number; type: string; params: Record<string, unknown>; save?: boolean; name?: string }) =>
+    request<{ id: number; name: string; meta: IndicatorMeta }>('/api/bt/indicators/compute', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
+  getIndicatorDefs: () => request<IndicatorDef[]>('/api/bt/indicators/defs'),
 }
 
 export type RunRow = { id: number; strategy_id: number | null; stats: Record<string, unknown> | null; config: Record<string, unknown>; created_at: string }

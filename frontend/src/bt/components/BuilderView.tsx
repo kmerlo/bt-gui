@@ -4,6 +4,7 @@ import { useBtStore, createDefaultTree, findNode, findParent } from '../store/bt
 import { strategiesApi } from '../../api/bt'
 import TreeEditor from './TreeEditor'
 import NodeInspector from './NodeInspector'
+import IndicatorPanel from './IndicatorPanel'
 import type { NodeConfig } from '../../types/bt'
 
 const NODE_TYPES = ['Strategy', 'Security', 'FixedIncomeStrategy', 'HedgeSecurity', 'CouponPayingSecurity'] as const
@@ -59,6 +60,8 @@ export default function BuilderView() {
   const [activeType, setActiveType] = useState<string | null>(null)
   const [rows, setRows] = useState<{ id: number; name: string }[]>([])
   const [loadId, setLoadId] = useState('')
+  const showIndicators = useBtStore((s) => s.showIndicators)
+  const toggleIndicators = useBtStore((s) => s.toggleIndicators)
 
   useEffect(() => {
     if (!tree) {
@@ -253,6 +256,9 @@ export default function BuilderView() {
         <button onClick={handleLoad} type="button" style={S.btn}>
           Load
         </button>
+        <button onClick={toggleIndicators} type="button" style={showIndicators ? S.btnPri : S.btn}>
+          Indicators
+        </button>
         {msg && <span style={S.msg}>{msg}</span>}
       </div>
 
@@ -269,6 +275,8 @@ export default function BuilderView() {
           <TreeEditor />
 
           <NodeInspector />
+
+          {showIndicators && <IndicatorPanel />}
         </div>
         <DragOverlay>{activeType ? <div style={{ ...S.card, opacity: 0.9 }}>{activeType}</div> : null}</DragOverlay>
       </DndContext>

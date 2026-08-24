@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { algosApi, type AlgoMeta, type AlgoSchema } from '../../api/bt'
+import { algosApi, dataApi, type AlgoMeta, type AlgoSchema, type DataSourceRow } from '../../api/bt'
 import { useBtStore, findNode } from '../store/btStore'
 import type { AlgoConfig } from '../../types/bt'
 
@@ -23,11 +23,13 @@ function AlgoItem({
   idx,
   onRemove,
   onUpdate,
+  indicatorSources,
 }: {
   algo: AlgoConfig
   idx: number
   onRemove: () => void
   onUpdate: (patch: Record<string, unknown>) => void
+  indicatorSources: DataSourceRow[]
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: `${algo.class_name}-${idx}` })
   const style = { transform: CSS.Transform.toString(transform), transition }
@@ -64,6 +66,26 @@ function AlgoItem({
           {Object.entries(schema.properties).map(([k, meta]) => {
             const val = (algo.params as Record<string, unknown>)[k]
             const t = meta.type
+            // indicator ref → render select with available indicators
+            if ((meta as Record<string, unknown>).kind === 'indicator') {
+              return (
+                <label key={k} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={S.label}>{k}</span>
+                  <select
+                    value={val as string ?? ''}
+                    onChange={(e) => onUpdate({ [k]: e.target.value || undefined })}
+                    style={S.sel}
+                  >
+                    <option value="">None</option>
+                    {indicatorSources.map((ind) => (
+                      <option key={ind.id} value={String(ind.id)}>
+                         #{ind.id} {ind.name} ({String((ind.meta as Record<string, unknown>)?.indicator_type ?? '?')})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )
+            }
             // enum via string with options? BE currently always string
             if (t === 'boolean' || t === 'bool') {
               return (
@@ -121,6 +143,7 @@ export default function AlgoStack({ nodeId }: { nodeId: string }) {
 
   const [metas, setMetas] = useState<AlgoMeta[]>([])
   const [sel, setSel] = useState('RunMonthly')
+  const [indicatorSources, setIndicatorSources] = useState<DataSourceRow[]>([])
 
   useEffect(() => {
     algosApi
@@ -133,6 +156,10 @@ export default function AlgoStack({ nodeId }: { nodeId: string }) {
       .catch((e) => {
         console.error('[AlgoStack] Failed to load algos:', e)
       })
+    dataApi
+      .listIndicators()
+      .then(setIndicatorSources)
+      .catch(() => { /* ignore */ })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const grouped = useMemo(() => {
@@ -231,7 +258,7 @@ export default function AlgoStack({ nodeId }: { nodeId: string }) {
           <SortableContext items={algos.map((a, i) => `${a.class_name}-${i}`)} strategy={verticalListSortingStrategy}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {algos.map((a, i) => (
-                <AlgoItem key={`${a.class_name}-${i}`} algo={a} idx={i} onRemove={() => removeAt(i)} onUpdate={(p) => updateAt(i, p)} />
+                <AlgoItem key={`${a.class_name}-${i}`} algo={a} idx={i} onRemove={() => removeAt(i)} onUpdate={(p) => updateAt(i, p)} indicatorSources={indicatorSources} />
               ))}
             </div>
           </SortableContext>

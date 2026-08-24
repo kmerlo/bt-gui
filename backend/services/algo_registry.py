@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import re
+from typing import Any
 
 import bt.algos as algos_mod
 from bt.core import Algo
@@ -26,6 +27,13 @@ _PREFIX_CATEGORY = [
     ("Debug", "Debug"),
 ]
 
+# Whitelist of (algo_name, param_name) pairs that accept a DataFrame.
+# bt.algos has no type annotations for these, so we maintain the list explicitly.
+DATAFRAME_PARAM_ALGOS: set[tuple[str, str]] = {
+    ("SelectWhere", "signal"),
+    ("WeighTarget", "weights"),
+}
+
 
 def _categorise(name: str) -> str:
     for prefix, label in _PREFIX_CATEGORY:
@@ -45,6 +53,10 @@ def _parse_requires_sets(doc: str) -> tuple[str | None, str | None]:
         if m:
             sets = m.group(1).strip()
     return requires, sets
+
+
+def _is_dataframe_param(algo_name: str, param_name: str) -> bool:
+    return (algo_name, param_name) in DATAFRAME_PARAM_ALGOS
 
 
 def discover_algos() -> dict[str, dict]:
@@ -81,7 +93,7 @@ def discover_algos() -> dict[str, dict]:
 REGISTRY: dict[str, dict] = discover_algos()
 
 
-def build_algo(class_name: str, params: dict | None):
+def build_algo(class_name: str, params: dict | None) -> Any:
     cls = getattr(algos_mod, class_name, None)
     if cls is None:
         raise ValueError(f"Unknown algo {class_name}")
@@ -95,7 +107,11 @@ def algo_json_schema(class_name: str) -> dict:
     props: dict[str, dict] = {}
     req: list[str] = []
     for k, v in info["params"].items():
-        props[k] = {"type": "string", "default": v["default"]}
+        prop: dict[str, Any] = {"type": "string", "default": v["default"]}
+        if _is_dataframe_param(class_name, k):
+            prop["kind"] = "indicator"
+            prop["type"] = "string"
+        props[k] = prop
         if v["required"]:
             req.append(k)
     return {"title": class_name, "type": "object", "properties": props, "required": req}

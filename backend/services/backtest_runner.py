@@ -69,12 +69,21 @@ def _build_commission(cfg: BacktestConfig):  # type: ignore[no-untyped-def]
     return None
 
 
-def run_backtest_sync(run_id: int, tree: StrategyTree, cfg: BacktestConfig, price_df: pd.DataFrame, additional: dict, volume, volatility):  # type: ignore[no-untyped-def]
+def run_backtest_sync(
+    run_id: int,
+    tree: StrategyTree,
+    cfg: BacktestConfig,
+    price_df: pd.DataFrame,
+    additional: dict,
+    volume,
+    volatility,
+    indicators: dict[str, pd.DataFrame] | None = None,
+):  # type: ignore[no-untyped-def]
     import bt
 
     _set_progress(run_id, {"progress": 0.1, "done": False})
     try:
-        strategy = to_bt_strategy(tree)
+        strategy = to_bt_strategy(tree, indicators or {})
         commissions = _build_commission(cfg)
         bt_obj = bt.Backtest(
             strategy,
@@ -194,25 +203,56 @@ def run_backtest_sync(run_id: int, tree: StrategyTree, cfg: BacktestConfig, pric
         raise
 
 
-async def _run_background(run_id: int, tree: StrategyTree, cfg: BacktestConfig, price_df: pd.DataFrame, additional: dict, volume, volatility):  # type: ignore[no-untyped-def]
+async def _run_background(
+    run_id: int,
+    tree: StrategyTree,
+    cfg: BacktestConfig,
+    price_df: pd.DataFrame,
+    additional: dict,
+    volume,
+    volatility,
+    indicators: dict[str, pd.DataFrame] | None = None,
+):  # type: ignore[no-untyped-def]
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(executor, run_backtest_sync, run_id, tree, cfg, price_df, additional, volume, volatility)
+    await loop.run_in_executor(executor, run_backtest_sync, run_id, tree, cfg, price_df, additional, volume, volatility, indicators)
 
 
-def schedule_backtest(run_id: int, tree: StrategyTree, cfg: BacktestConfig, price_df: pd.DataFrame, additional: dict, volume, volatility):  # type: ignore[no-untyped-def]
+def schedule_backtest(
+    run_id: int,
+    tree: StrategyTree,
+    cfg: BacktestConfig,
+    price_df: pd.DataFrame,
+    additional: dict,
+    volume,
+    volatility,
+    indicators: dict[str, pd.DataFrame] | None = None,
+):  # type: ignore[no-untyped-def]
     _set_progress(run_id, {"progress": 0.05, "done": False})
     try:
         loop = asyncio.get_running_loop()
-        loop.create_task(_run_background(run_id, tree, cfg, price_df, additional, volume, volatility))
+        loop.create_task(_run_background(run_id, tree, cfg, price_df, additional, volume, volatility, indicators))
     except RuntimeError:
 
         def _bg():
-            run_backtest_sync(run_id, tree, cfg, price_df, additional, volume, volatility)
+            run_backtest_sync(run_id, tree, cfg, price_df, additional, volume, volatility, indicators)
 
         executor.submit(_bg)
 
 
 # fallback for callers that only have ids (production path via SessionLocal)
-def schedule_backtest_by_ids(run_id: int, tree: StrategyTree, cfg: BacktestConfig, price_source_id: int, extra_ids: dict[str, int]):  # type: ignore[no-untyped-def]
+def schedule_backtest_by_ids(run_id: int, tree: StrategyTree, cfg: BacktestConfig, price_source_id: int, extra_ids: dict[str, int], indicator_ids: list[int] | None = None):  # type: ignore[no-untyped-def]
     price_df, additional, volume, volatility = _load_dataframes(price_source_id, extra_ids)
-    schedule_backtest(run_id, tree, cfg, price_df, additional, volume, volatility)
+    indicators: dict[str, pd.DataFrame] = {}
+    if indicator_ids:
+        db = SessionLocal()
+        try:
+            for ind_id in indicator_ids:
+                row = db.query(DBSource).filter(DBSource.id == ind_id).first()
+                if row is None or row.parquet_blob is None:
+                    continue
+                df = pd.read_parquet(io.BytesIO(row.parquet_blob))
+                df.index = pd.to_datetime(df.index)
+                indicators[str(ind_id)] = df
+        finally:
+            db.close()
+    schedule_backtest(run_id, tree, cfg, price_df, additional, volume, volatility, indicators)
