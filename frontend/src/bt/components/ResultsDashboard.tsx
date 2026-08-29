@@ -107,6 +107,9 @@ export default function ResultsDashboard({ runId }: { runId: number | null }) {
   const chartRef = useRef<HTMLDivElement | null>(null)
   const ddRef = useRef<HTMLDivElement | null>(null)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const [txSortKey, setTxSortKey] = useState<string | null>(null)
+  const [txSortDir, setTxSortDir] = useState<'asc' | 'desc'>('asc')
+  const [txFilters, setTxFilters] = useState<Record<string, string>>({})
 
   const groupedMetrics = useMemo(() => {
     if (!stats) return null
@@ -120,6 +123,30 @@ export default function ResultsDashboard({ runId }: { runId: number | null }) {
     const otherRows = entries.filter(([k]) => !used.has(k))
     return { groups, otherRows }
   }, [stats])
+
+  const txCols = useMemo(() => Object.keys(tx[0] ?? {}), [tx])
+  const txDisplay = useMemo(() => {
+    let rows = [...tx]
+    for (const k of txCols) {
+      const v = txFilters[k]?.trim().toLowerCase()
+      if (v) rows = rows.filter((r) => String(r[k] ?? '').toLowerCase().includes(v))
+    }
+    if (txSortKey) {
+      rows.sort((a, b) => {
+        const av = String(a[txSortKey] ?? ''), bv = String(b[txSortKey] ?? '')
+        return txSortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+      })
+    }
+    return rows.slice(0, 20)
+  }, [tx, txCols, txFilters, txSortKey, txSortDir])
+
+  const txHandleSort = (col: string) => {
+    if (txSortKey === col) setTxSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setTxSortKey(col); setTxSortDir('asc') }
+  }
+  const txSortIcon = (col: string) => (txSortKey === col ? (txSortDir === 'asc' ? ' ▲' : ' ▼') : ' ↕')
+
+  const txSetFilter = (col: string, v: string) => setTxFilters((p) => ({ ...p, [col]: v }))
 
   useEffect(() => { setSel(runId) }, [runId])
 
@@ -475,23 +502,37 @@ export default function ResultsDashboard({ runId }: { runId: number | null }) {
           )}
           {tx.length > 0 && (
             <div style={S.card}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>Transactions (first 20)</div>
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>
+                Transactions ({txDisplay.length})
+              </div>
               <table style={S.table}>
                 <thead>
                   <tr>
-                    {Object.keys(tx[0] ?? {}).map((k) => (
-                      <th key={k} style={S.th}>
-                        {k}
+                    {txCols.map((k) => (
+                      <th key={k} style={S.th} onClick={() => txHandleSort(k)}>
+                        {k}{txSortIcon(k)}
+                      </th>
+                    ))}
+                  </tr>
+                  <tr>
+                    {txCols.map((k) => (
+                      <th key={k} style={S.thFilter}>
+                        <input
+                          style={S.inputSm}
+                          placeholder={`filtra ${k}`}
+                          value={txFilters[k] ?? ''}
+                          onChange={(e) => txSetFilter(k, e.target.value)}
+                        />
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {tx.slice(0, 20).map((row, i) => (
+                  {txDisplay.map((row, i) => (
                     <tr key={i}>
-                      {Object.values(row).map((v, j) => (
-                        <td key={j} style={S.td}>
-                          {String(v)}
+                      {txCols.map((k) => (
+                        <td key={k} style={S.td}>
+                          {String(row[k] ?? '')}
                         </td>
                       ))}
                     </tr>
