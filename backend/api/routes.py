@@ -827,7 +827,7 @@ def get_run(run_id: int, db: Session = Depends(get_db)):  # noqa: B008
     if row.transactions_parquet:
         try:
             df = _blob_to_df(row.transactions_parquet)
-            tx = df.head(100).to_dict(orient="records")
+            tx = df.reset_index().head(100).to_dict(orient="records")
         except Exception:  # noqa: BLE001
             tx = None
     # start/end from config or prices_parquet
