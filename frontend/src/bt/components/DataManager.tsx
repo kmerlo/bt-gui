@@ -1,286 +1,253 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { dataApi, type DataSourceRow } from '../../api/bt'
+import { priceDataApi, type PriceRow, type PriceTickerRow } from '../../api/bt'
+
+const COLUMNS: { key: keyof PriceTickerRow; label: string }[] = [
+  { key: 'symbol', label: 'Symbol' },
+  { key: 'interval', label: 'Interval' },
+  { key: 'start', label: 'Start' },
+  { key: 'end', label: 'End' },
+  { key: 'count', label: 'Rows' },
+]
+
+type SortState = { by: string | null; dir: 'asc' | 'desc' }
+type FilterState = Record<string, string>
 
 const S = {
   wrap: { padding: 12, color: '#c9d1d9' } as const,
   table: { borderCollapse: 'collapse', width: '100%', fontSize: 13 } as const,
-  th: { border: '1px solid #30363d', padding: 6, background: '#161b22', textAlign: 'left' as const, cursor: 'pointer', userSelect: 'none' as const, whiteSpace: 'nowrap' as const, position: 'sticky' as const, top: 0, zIndex: 1 } as const,
-  thCb: { border: '1px solid #30363d', padding: 6, background: '#161b22', textAlign: 'center' as const, position: 'sticky' as const, top: 0, zIndex: 1, width: 36 } as const,
-  td: { border: '1px solid #30363d', padding: 6 } as const,
-  input: { background: '#0d1117', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, padding: '6px 8px' } as const,
+  th: { border: '1px solid #30363d', padding: '4px 8px', background: '#161b22', textAlign: 'left' as const, cursor: 'pointer', userSelect: 'none' as const, whiteSpace: 'nowrap' as const, position: 'sticky' as const, top: 0, zIndex: 1 } as const,
+  thActive: { border: '1px solid #58a6ff', padding: '4px 8px', background: '#1f2b3a', textAlign: 'left' as const, cursor: 'pointer', userSelect: 'none' as const, whiteSpace: 'nowrap' as const, position: 'sticky' as const, top: 0, zIndex: 1 } as const,
+  thFilter: { border: '1px solid #30363d', padding: '2px 4px', background: '#0d1117', textAlign: 'left' as const, whiteSpace: 'nowrap' as const, position: 'sticky' as const, top: 28, zIndex: 1 } as const,
+  td: { border: '1px solid #30363d', padding: '4px 8px', whiteSpace: 'nowrap' as const } as const,
+  input: { background: '#0d1117', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 4, padding: '3px 6px', fontSize: 12, width: '100%', boxSizing: 'border-box' as const },
   btn: { background: '#21262d', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, padding: '6px 10px', cursor: 'pointer' } as const,
   btnDanger: { background: '#da3633', color: '#fff', border: '1px solid #f85149', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12 } as const,
+  btnPri: { background: '#238636', color: '#fff', border: '1px solid #30363d', borderRadius: 6, padding: '6px 10px', cursor: 'pointer' } as const,
+  btnView: { background: '#1f6feb', color: '#fff', border: '1px solid #1f6feb', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12 } as const,
+  btnViewHide: { background: '#6e4022', color: '#fff', border: '1px solid #9e6a16', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12 } as const,
   row: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 } as const,
   msgOk: { fontSize: 12, color: '#3fb950', marginBottom: 8 } as const,
   msgErr: { fontSize: 12, color: '#f85149', marginBottom: 8 } as const,
+  dataWrap: { border: '1px solid #30363d', borderRadius: 4, marginTop: 4, overflow: 'auto', maxHeight: 300, background: '#0d1117' } as const,
+  dataTh: { border: '1px solid #30363d', padding: '3px 8px', background: '#161b22', textAlign: 'left' as const, cursor: 'pointer', userSelect: 'none' as const, whiteSpace: 'nowrap' as const, position: 'sticky' as const, top: 0, zIndex: 1, fontSize: 12 } as const,
+  dataTd: { border: '1px solid #30363d', padding: '2px 8px', fontSize: 12, whiteWhite: 'nowrap' as const } as const,
 }
 
+const ROW_COLS = ['date', 'open', 'high', 'low', 'close', 'adj_close', 'volume'] as const
+
 export default function DataManager() {
-  const [rows, setRows] = useState<DataSourceRow[]>([])
-  const [name, setName] = useState('')
-  const [dtype, setDtype] = useState('price')
-  const [file, setFile] = useState<File | null>(null)
-  const [tickers, setTickers] = useState('AAPL,MSFT')
-  const [start, setStart] = useState('2020-01-01')
-  const [end, setEnd] = useState('2020-12-31')
-  const [preview, setPreview] = useState<{ columns: string[]; rows: Record<string, unknown>[] } | null>(null)
-  const [previewSortDir, setPreviewSortDir] = useState<'asc' | 'desc'>('desc')
+  const [tickers, setTickers] = useState<PriceTickerRow[]>([])
+  const [symbolInput, setSymbolInput] = useState('')
+  const [start, setStart] = useState('')
+  const [end, setEnd] = useState('')
+  const [sort, setSort] = useState<SortState>({ by: null, dir: 'asc' })
+  const [filters, setFilters] = useState<FilterState>({})
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [rowCache, setRowCache] = useState<Record<string, PriceRow[]>>({})
+  const [fetching, setFetching] = useState<Set<string>>(new Set())
   const [msg, setMsg] = useState('')
-  const [search, setSearch] = useState('')
-  const [searchDraft, setSearchDraft] = useState('')
-  const [sortBy, setSortBy] = useState<string | null>(null)
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
-  const [selected, setSelected] = useState<Set<number>>(new Set())
 
   const refresh = useCallback(() => {
-    dataApi
-      .list({ search: search || undefined, sort_by: sortBy ?? undefined, sort_dir: sortDir })
-      .then((data) => {
-        setRows(data)
-        // prune selection: keep only ids still present
-        setSelected((prev) => {
-          const ids = new Set(data.map((r) => r.id))
-          const n = new Set<number>()
-          for (const id of prev) if (ids.has(id)) n.add(id)
-          return n
-        })
-      })
-      .catch((e: unknown) => setMsg(String(e)))
-  }, [search, sortBy, sortDir])
+    priceDataApi.list().then(setTickers).catch((e: unknown) => setMsg(String(e)))
+  }, [])
 
-  useEffect(() => {
-    refresh()
-  }, [refresh])
-
-  const handleSort = (col: string) => {
-    if (sortBy === col) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-    else { setSortBy(col); setSortDir('asc') }
-  }
-
-  const sortIcon = (col: string) => (sortBy === col ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ' ↕')
-
-  const handleUpload = async () => {
-    if (!file || !name) {
-      setMsg('name + file required')
-      return
-    }
-    try {
-      await dataApi.upload(name, dtype, file)
-      setMsg(`[ok] uploaded ${name}`)
-      refresh()
-    } catch (e) {
-      setMsg(`[err] ${String(e)}`)
-    }
-  }
+  useEffect(() => { refresh() }, [refresh])
 
   const handleFetch = async () => {
-    const t = tickers
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
-    if (!name.trim()) {
-      setMsg(`name required (got "${name}")`)
+    const raw = symbolInput.trim()
+    if (!raw) { setMsg('ticker required (e.g. AAPL)'); return }
+    const symbols = raw.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
+    if (symbols.length === 0) { setMsg('ticker required (e.g. AAPL)'); return }
+
+    setFetching((s) => new Set(s).add('__batch__'))
+    setMsg('')
+    const results: string[] = []
+    for (const sym of symbols) {
+      try {
+        const r = await priceDataApi.fetch(sym, start || undefined, end || undefined)
+        results.push(`[ok] ${r.symbol} — ${r.rows} rows`)
+      } catch (e) {
+        results.push(`[err] ${sym}: ${String(e)}`)
+      }
+    }
+    setMsg(results.join('\n'))
+    setSymbolInput('')
+    refresh()
+    setFetching((s) => { const n = new Set(s); n.delete('__batch__'); return n })
+  }
+
+  const handleDelete = async (symbol: string) => {
+    if (!window.confirm(`Eliminare dati per "${symbol}"?`)) return
+    try {
+      await priceDataApi.delete(symbol)
+      setMsg(`[ok] deleted ${symbol}`)
+      setRowCache((c) => { const n = { ...c }; delete n[symbol]; return n })
+      setExpanded((s) => { const n = new Set(s); n.delete(symbol); return n })
+      refresh()
+    } catch (e) {
+      setMsg(`[err] ${String(e)}`)
+    }
+  }
+
+  const toggleExpand = async (symbol: string) => {
+    if (expanded.has(symbol)) {
+      setExpanded((s) => { const n = new Set(s); n.delete(symbol); return n })
       return
     }
-    if (t.length === 0) {
-      setMsg('tickers required (e.g. AAPL,MSFT)')
-      return
-    }
+    setFetching((s) => new Set(s).add(symbol))
     try {
-      const r = await dataApi.fetchFfn(name.trim(), dtype, t, start, end)
-      const meta = r.meta as Record<string, unknown>
-      const shape = meta.shape as number[] | undefined
-      const n = shape ? String(shape[0]) : '?'
-      setMsg(`[ok] fetched ${r.name}  (${n} rows)`)
-      refresh()
+      const t = tickers.find((r) => r.symbol === symbol)
+      const rows = await priceDataApi.getRows(symbol, t ? { start: t.start, end: t.end } : undefined)
+      setRowCache((c) => ({ ...c, [symbol]: rows }))
+      setExpanded((s) => new Set(s).add(symbol))
     } catch (e) {
       setMsg(`[err] ${String(e)}`)
+    } finally {
+      setFetching((s) => { const n = new Set(s); n.delete(symbol); return n })
     }
   }
 
-  const handlePreview = async (id: number) => {
-    try {
-      const p = await dataApi.preview(id)
-      setPreview({ columns: p.columns, rows: p.rows })
-      setPreviewSortDir('desc')
-    } catch (e) {
-      setMsg(String(e))
+  const handleSort = (key: string) => {
+    setSort((prev) => ({
+      by: key,
+      dir: prev.by === key ? (prev.dir === 'asc' ? 'desc' : 'asc') : 'asc',
+    }))
+  }
+
+  const handleFilter = (key: string, val: string) => {
+    setFilters((prev) => ({ ...prev, [key]: val }))
+  }
+
+  const sortedFiltered = useMemo(() => {
+    let list = [...tickers]
+    // apply filters
+    for (const [key, val] of Object.entries(filters)) {
+      if (!val) continue
+      list = list.filter((r) => String((r as unknown as Record<string, unknown>)[key]).toLowerCase().includes(val.toLowerCase()))
     }
-  }
-
-  const previewRowsSorted = useMemo(() => {
-    if (!preview) return []
-    const rows = [...preview.rows]
-    rows.sort((a, b) => {
-      const da = String(a['date'] ?? '')
-      const db = String(b['date'] ?? '')
-      return previewSortDir === 'asc' ? da.localeCompare(db) : db.localeCompare(da)
-    })
-    return rows
-  }, [preview, previewSortDir])
-
-  const toggleOne = (id: number) => {
-    setSelected((prev) => {
-      const n = new Set(prev)
-      if (n.has(id)) n.delete(id)
-      else n.add(id)
-      return n
-    })
-  }
-
-  const toggleAll = (checked: boolean) => {
-    if (checked) setSelected(new Set(rows.map((r) => r.id)))
-    else setSelected(new Set())
-  }
-
-  const handleDeleteOne = async (id: number, dname: string) => {
-    if (!window.confirm(`Eliminare datasource "${dname}" (id:${id})?`)) return
-    try {
-      await dataApi.delete(id)
-      setMsg(`[ok] eliminato ${dname}`)
-      setSelected((prev) => { const n = new Set(prev); n.delete(id); return n })
-      refresh()
-    } catch (e) {
-      setMsg(`[err] ${String(e)}`)
+    // apply sort
+    if (sort.by) {
+      list.sort((a, b) => {
+        const av = a[sort.by as keyof PriceTickerRow]
+        const bv = b[sort.by as keyof PriceTickerRow]
+        const cmp = String(av ?? '').localeCompare(String(bv ?? ''))
+        return sort.dir === 'asc' ? cmp : -cmp
+      })
     }
-  }
+    return list
+  }, [tickers, sort, filters])
 
-  const handleBulkDelete = async () => {
-    if (selected.size === 0) return
-    if (!window.confirm(`Eliminare ${selected.size} datasource selezionati?`)) return
-    try {
-      const ids = [...selected]
-      const r = await dataApi.bulkDelete(ids)
-      setMsg(`[ok] eliminati ${r.deleted} datasource`)
-      setSelected(new Set())
-      refresh()
-    } catch (e) {
-      setMsg(`[err] ${String(e)}`)
-    }
+  const sortIcon = (key: string) => {
+    if (sort.by !== key) return ' ↕'
+    return sort.dir === 'asc' ? ' ▲' : ' ▼'
   }
-
-  const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id))
 
   return (
     <div style={S.wrap}>
-      <h3 style={{ margin: '0 0 12px' }}>Data Manager</h3>
-      <div style={S.row}>
-        <input style={S.input} placeholder="name *" value={name} onChange={(e) => setName(e.target.value)} />
-        <select style={S.input} value={dtype} onChange={(e) => setDtype(e.target.value)}>
-          <option value="price">price</option>
-          <option value="volume">volume</option>
-          <option value="volatility">volatility</option>
-          <option value="bidoffer">bidoffer</option>
-        </select>
-        <input type="file" accept=".csv,.parquet" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-        <button type="button" style={S.btn} onClick={handleUpload}>
-          Upload
-        </button>
-      </div>
-      <div style={S.row}>
-        <input style={S.input} placeholder="tickers AAPL,MSFT" value={tickers} onChange={(e) => setTickers(e.target.value)} />
-        <input style={S.input} type="date" value={start} onChange={(e) => setStart(e.target.value)} />
-        <input style={S.input} type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
-        <button type="button" style={S.btn} onClick={handleFetch}>
-          Fetch FFN
-        </button>
-      </div>
+      <h3 style={{ margin: '0 0 12px' }}>Ticker Catalog</h3>
       <div style={S.row}>
         <input
-          style={S.input}
-          placeholder="cerca (name/type/source)"
-          value={searchDraft}
-          onChange={(e) => setSearchDraft(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') setSearch(searchDraft) }}
+          style={{ ...S.input, width: 120 }}
+          placeholder="TICKER"
+          value={symbolInput}
+          onChange={(e) => setSymbolInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleFetch() }}
         />
-        <button type="button" style={S.btn} onClick={() => setSearch(searchDraft)}>Filtra</button>
-        {(search || sortBy) && (
-          <button type="button" style={S.btn} onClick={() => { setSearch(''); setSearchDraft(''); setSortBy(null); setSortDir('asc') }}>Reset</button>
-        )}
-        <span style={{ fontSize: 12, color: '#8b949e' }}>{rows.length} sorgenti{search ? ' (filtrate)' : ''}{selected.size > 0 ? ` · selezionate: ${selected.size}` : ''}</span>
+        <input style={S.input} type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+        <input style={S.input} type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
+        <button type="button" style={fetching.has('__batch__') ? { ...S.btn, opacity: 0.5 } : S.btnPri} onClick={handleFetch} disabled={fetching.has('__batch__')}>
+          {fetching.has('__batch__') ? 'Fetching…' : 'Fetch'}
+        </button>
       </div>
-      {selected.size > 0 && (
-        <div style={{ ...S.row, marginBottom: 8 }}>
-          <button type="button" style={S.btnDanger} onClick={handleBulkDelete}>Elimina selezionate ({selected.size})</button>
-          <button type="button" style={S.btn} onClick={() => setSelected(new Set())}>Deseleziona</button>
-        </div>
-      )}
       {msg && <div style={msg.startsWith('[ok]') ? S.msgOk : S.msgErr}>{msg}</div>}
-      <div style={{ overflow: 'auto', maxHeight: '55vh', border: '1px solid #30363d', borderRadius: 6 }}>
+      <div style={{ overflow: 'auto', maxHeight: '70vh', border: '1px solid #30363d', borderRadius: 6 }}>
         <table style={S.table}>
           <thead>
             <tr>
-              <th style={S.thCb}>
-                <input type="checkbox" checked={allChecked} onChange={(e) => toggleAll(e.target.checked)} title="Seleziona tutti" />
-              </th>
-              <th style={S.th} onClick={() => handleSort('id')}>id{sortIcon('id')}</th>
-              <th style={S.th} onClick={() => handleSort('name')}>name{sortIcon('name')}</th>
-              <th style={S.th} onClick={() => handleSort('type')}>type{sortIcon('type')}</th>
-              <th style={S.th} onClick={() => handleSort('source')}>source{sortIcon('source')}</th>
-              <th style={{ ...S.th, cursor: 'default' }}>meta</th>
-              <th style={{ ...S.th, cursor: 'default', textAlign: 'center' as const }}>action</th>
-              <th style={{ ...S.th, cursor: 'default', textAlign: 'center' as const }}>Delete</th>
+              {COLUMNS.map((col) => (
+                <th key={col.key} style={sort.by === col.key ? S.thActive : S.th} onClick={() => handleSort(col.key)}>
+                  {col.label}{sortIcon(col.key)}
+                </th>
+              ))}
+              <th style={{ ...S.th, textAlign: 'center' as const }}>View</th>
+              <th style={{ ...S.th, textAlign: 'center' as const }}>Actions</th>
+            </tr>
+            <tr>
+              {COLUMNS.map((col) => (
+                <th key={`f-${col.key}`} style={S.thFilter}>
+                  <input
+                    style={S.input}
+                    placeholder={`filter…`}
+                    value={filters[col.key] ?? ''}
+                    onChange={(e) => handleFilter(col.key, e.target.value)}
+                  />
+                </th>
+              ))}
+              <th style={S.thFilter} /><th style={S.thFilter} />
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? (
-              <tr><td style={S.td} colSpan={8}>nessun datasource</td></tr>
-            ) : rows.map((r) => (
-              <tr key={r.id}>
-                <td style={{ ...S.td, textAlign: 'center' as const }}>
-                  <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleOne(r.id)} />
-                </td>
-                <td style={S.td}>{r.id}</td>
-                <td style={S.td}>{r.name}</td>
-                <td style={S.td}>{r.type}</td>
-                <td style={S.td}>{r.source}</td>
-                <td style={S.td}>{JSON.stringify(r.meta)}</td>
-                <td style={{ ...S.td, textAlign: 'center' as const }}>
-                  <button type="button" style={S.btn} onClick={() => handlePreview(r.id)}>
-                    preview
-                  </button>
-                </td>
-                <td style={{ ...S.td, textAlign: 'center' as const }}>
-                  <button type="button" style={S.btnDanger} onClick={() => handleDeleteOne(r.id, r.name)}>Delete</button>
-                </td>
-              </tr>
-            ))}
+            {sortedFiltered.length === 0 ? (
+              <tr><td style={S.td} colSpan={7}>Nessun ticker — inserisci un simbolo e premi Fetch</td></tr>
+            ) : sortedFiltered.map((t) => {
+              const isExpanded = expanded.has(t.symbol)
+              const rows = rowCache[t.symbol] ?? []
+              return (
+                <>
+                  <tr key={t.symbol}>
+                    <td style={{ ...S.td, fontWeight: 600 }}>{t.symbol}</td>
+                    <td style={S.td}>{t.interval}</td>
+                    <td style={S.td}>{t.start}</td>
+                    <td style={S.td}>{t.end}</td>
+                    <td style={S.td}>{t.count}</td>
+                    <td style={{ ...S.td, textAlign: 'center' as const }}>
+                      <button type="button" style={isExpanded ? S.btnViewHide : S.btnView} onClick={() => toggleExpand(t.symbol)}>
+                        {isExpanded ? 'Hide' : 'View'}
+                      </button>
+                    </td>
+                    <td style={{ ...S.td, textAlign: 'center' as const }}>
+                      <button type="button" style={S.btnDanger} onClick={() => handleDelete(t.symbol)}>Delete</button>
+                    </td>
+                  </tr>
+                  {isExpanded && (
+                    <tr key={`${t.symbol}-data`}>
+                      <td style={{ ...S.td, background: '#161b22' }} colSpan={7}>
+                        <div style={{ padding: '4px 8px', fontSize: 12, color: '#8b949e', marginBottom: 4 }}>
+                          {rows.length} righe per {t.symbol}
+                        </div>
+                        <div style={S.dataWrap}>
+                          <table style={{ ...S.table, fontSize: 12 }}>
+                            <thead>
+                              <tr>
+                                {ROW_COLS.map((c) => (
+                                  <th key={c} style={S.dataTh}>{c}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {rows.map((r, i) => (
+                                <tr key={i}>
+                                  <td style={S.dataTd}>{r.date}</td>
+                                  <td style={S.dataTd}>{r.open ?? ''}</td>
+                                  <td style={S.dataTd}>{r.high ?? ''}</td>
+                                  <td style={S.dataTd}>{r.low ?? ''}</td>
+                                  <td style={S.dataTd}>{r.close ?? ''}</td>
+                                  <td style={S.dataTd}>{r.adj_close ?? ''}</td>
+                                  <td style={S.dataTd}>{r.volume ?? ''}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              )
+            })}
           </tbody>
         </table>
       </div>
-      {preview && (
-        <div style={{ marginTop: 12 }}>
-          <div style={{ fontSize: 12, color: '#8b949e', marginBottom: 4 }}>preview {preview.columns.join(', ')}</div>
-          <div style={{ overflow: 'auto', maxHeight: '40vh', border: '1px solid #30363d', borderRadius: 6 }}>
-            <table style={S.table}>
-              <thead>
-                <tr>
-                  <th style={S.th} onClick={() => setPreviewSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}>
-                    date {previewSortDir === 'asc' ? '▲' : '▼'}
-                  </th>
-                  {preview.columns.map((c) => (
-                    <th key={c} style={{ ...S.th, cursor: 'default' }}>
-                      {c}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {previewRowsSorted.map((row, i) => (
-                  <tr key={i}>
-                    <td style={S.td}>{String(row['date'] ?? '')}</td>
-                    {preview.columns.map((c) => (
-                      <td key={c} style={S.td}>
-                        {String(row[c] ?? '')}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
