@@ -99,3 +99,62 @@ git push origin master
 - Risposte brevi, fattuali; cita `file:line` per funzioni-simbolo.
 - Verifica con esecuzione (`pytest`, `npm run build`) prima di dichiarare done.
 - Ponytail attivo di default: soluzione più corta che funziona; marca scorciatoie con `// ponytail:`.
+
+## 8. Documentazione e appunti sviluppo
+
+Dopo ogni task di sviluppo (commit), aggiornare i file nella cartella `my-docs/`:
+
+### 8.1 `appunti_sviluppi.md` — registro modifiche
+
+Inserire una riga con data/ora e descrizione della modifica:
+
+```
+- [YYYY-MM-DD HH:MM] — Descrizione sintetica. [file/modulo interessato]
+```
+
+### 8.2 Routing informazioni
+
+- **Informazioni utente** (come usare il software, tutorial, guide operative) → aggiornare `my-docs/GUIDE_manuale_bt_gui.md`.
+- **Informazioni tecniche** (scelte architetturali, struttura DB, formati dati, decision log) → aggiornare `my-docs/GUIDE_documentazione_tecnica.md`.
+
+### 8.3 File esistenti in my-docs/
+
+| File | Scopo |
+|------|-------|
+| `GUIDE-CODING_PRACTICES.md` | Regole di sviluppo (fonti normative) |
+| `GUIDE-TUTORIAL_STRATEGIE.md` | Tutorial passo-passo strategie |
+| `GUIDE-AVVIARE-GUI.md` | Avvio rapido del software |
+| `GUIDE_documentazione_tecnica.md` | Scelte architetturali e tecniche |
+| `GUIDE_manuale_bt_gui.md` | Manuale utente finale |
+| `appunti_sviluppi.md` | Registro cronologico modifiche |
+
+## 9. Dati & DB — MAI cancellare contenuti utente (REGOLA INVIOLABILE)
+
+> ⚠️ **VIETATO ASSOLUTO — pena blocco PR:** cancellare o modificare righe utente in `bt_gui.db` (`strategies`, `data_sources`, `backtest_runs`, `tutorial1` / indicatori `sma50` etc.). Ogni violazione è un bug critico, anche se fatta da `pytest` o da un test.
+
+**Divieti espliciti (MAI fare, nemmeno nei test):**
+
+- `rm *.db`, `DROP TABLE`, `DELETE FROM <tabella>` senza `WHERE` su dati utente.
+- `DELETE FROM data_sources WHERE type='indicator'` o qualsiasi `WHERE type=...` che colpisce righe utente (es. `sma50`).
+- `db.query(DBSource).filter(DBSource.type == "indicator").delete()` — CANCELLATO: cancella anche indicatori utente. **MAI.**
+- `SessionLocal().query(...).delete()` senza filtro `name LIKE 'test_%' / 'tmp_%' / 'mock_%'`.
+- Sovrascrivere `bt_gui.db` con un DB di test o fare `Base.metadata.drop_all()` sul file reale.
+
+**Cosa fare invece (obbligatorio):**
+
+- Per test/verifiche crea **solo** righe con prefisso `test_` / `tmp_` / `mock_` / `ind_sma_` / `smatest_` etc. (es. `test_csv_abc123`, `tmp_preset_test_123`).
+- Cancella **solo ed esclusivamente** quelle righe, con filtro esplicito sul nome:
+  ```python
+  # ✅ ESEMPIO CORRETTO
+  db.query(DBSource).filter(
+      DBSource.name.like('test\\_%') | DBSource.name.like('tmp\\_%') | DBSource.name.like('mock\\_%')
+  ).delete(synchronize_session=False)
+  # ❌ VIETATO
+  db.query(DBSource).filter(DBSource.type == "indicator").delete()
+  ```
+- `pytest` su `bt_gui.db` reale: usa `Base.metadata.create_all` + `SessionLocal` isolata, MAI `drop_all`; lascia il DB pulito **solo** dagli artefatti `test_%`/`tmp_%`/`mock_%` a fine run. Preferisci `sqlite:///:memory:` con `StaticPool` (vedi `tests/backend/test_persistence.py:11`) per test isolati.
+- Prima di qualsiasi operazione distruttiva (anche in un test) chiedi conferma esplicita all'utente e mostra il `WHERE` che userai.
+- Se un test deve verificare "lista vuota", NON svuotare la tabella utente: crea un DB in-memory isolato o filtra per `name LIKE 'test_%'` e asserisci su quello, mai su `SELECT * FROM data_sources` globale.
+
+**Se hai già cancellato per errore:** fermati, avvisa l'utente, verifica con `SELECT id, name, type FROM data_sources` cosa è stato perso e proponi ripristino. Non nascondere l'errore.
+

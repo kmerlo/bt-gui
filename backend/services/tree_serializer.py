@@ -45,7 +45,22 @@ def _build_algos(algo_configs: list, indicators: dict[str, pd.DataFrame] | None 
     return [build_algo(a.class_name, _resolve_indicator_params(a, indicators)) for a in algo_configs]
 
 
+def _validate_unique_children(cfg: NodeConfig) -> None:
+    if not cfg.children:
+        return
+    seen: dict[str, str] = {}
+    for c in cfg.children:
+        if c.name in seen:
+            raise ValueError(
+                f"Duplicate child name '{c.name}' under '{cfg.name}' — Security/Strategy names must be unique per parent. "
+                f"Rename one of them (ids {seen[c.name]} vs {c.id})."
+            )
+        seen[c.name] = c.id or c.name
+        _validate_unique_children(c)
+
+
 def _build_node(cfg: NodeConfig, indicators: dict[str, pd.DataFrame] | None = None):
+    _validate_unique_children(cfg)
     cls = TYPE_MAP.get(cfg.type)
     if cls is None:
         raise ValueError(f"Unknown node type {cfg.type}")

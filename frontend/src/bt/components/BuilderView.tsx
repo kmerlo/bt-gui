@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { DndContext, closestCenter, type DragEndEvent, type DragStartEvent, useDraggable, DragOverlay } from '@dnd-kit/core'
-import { useBtStore, createDefaultTree, findNode, findParent } from '../store/btStore'
+import { useBtStore, createDefaultTree, findNode, findParent, buildPresetForTree } from '../store/btStore'
 import { strategiesApi } from '../../api/bt'
 import TreeEditor from './TreeEditor'
 import NodeInspector from './NodeInspector'
@@ -69,6 +69,9 @@ export default function BuilderView() {
       setTree(def)
       setNameDraft(def.name)
       setSavedId(null)
+      // ensure inspector not empty on new tree (select root; store handles but ensure explicit for first load)
+      const sid = useBtStore.getState().selectedId
+      if (!sid && def.root.id) useBtStore.getState().setSelected(def.root.id)
     } else if (!nameDraft) {
       setNameDraft(tree.name)
     }
@@ -94,7 +97,38 @@ export default function BuilderView() {
 
   const handleSave = async () => {
     if (!tree) return
-    const toSave = { ...tree, name: nameDraft.trim() || tree.name }
+    window.dispatchEvent(new Event('bt-before-save'))
+    await new Promise((r) => setTimeout(r, 0))
+    const freshTree = useBtStore.getState().tree ?? tree
+    const dup = (() => {
+      const findDup = (node: NodeConfig): string | null => {
+        if (node.children.length > 0) {
+          const seen = new Map<string, string>()
+          for (const c of node.children) {
+            if (seen.has(c.name)) return `'${c.name}' duplicato sotto '${node.name}' — rinomina uno dei due`
+            seen.set(c.name, c.id ?? c.name)
+          }
+          for (const c of node.children) {
+            const d = findDup(c)
+            if (d) return d
+          }
+        }
+        return null
+      }
+      return findDup(freshTree.root as NodeConfig)
+    })()
+    if (dup) {
+      setMsg(`Errore: ${dup}`)
+      return
+    }
+    const preset = buildPresetForTree(useBtStore.getState)
+    const targetName = nameDraft.trim() || freshTree.name
+    const toSave = {
+      ...freshTree,
+      name: targetName,
+      root: { ...freshTree.root, name: targetName },
+      preset,
+    } as unknown as typeof tree
     try {
       if (savedId != null) {
         const r = await strategiesApi.update(savedId, toSave)
@@ -108,7 +142,57 @@ export default function BuilderView() {
       }
       refreshList()
     } catch (e) {
-      setMsg(String(e))
+      const m = String(e)
+      if (m.includes('409') && m.includes('already exists')) {
+        setMsg(`Errore: '${targetName}' già esistente — cambia nome`)
+      } else setMsg(m)
+    }
+  }
+
+  const handleSaveAsNew = async () => {
+    if (!tree) return
+    window.dispatchEvent(new Event('bt-before-save'))
+    await new Promise((r) => setTimeout(r, 0))
+    const freshTree = useBtStore.getState().tree ?? tree
+    const dup = (() => {
+      const findDup = (node: NodeConfig): string | null => {
+        if (node.children.length > 0) {
+          const seen = new Map<string, string>()
+          for (const c of node.children) {
+            if (seen.has(c.name)) return `'${c.name}' duplicato sotto '${node.name}' — rinomina uno dei due`
+            seen.set(c.name, c.id ?? c.name)
+          }
+          for (const c of node.children) {
+            const d = findDup(c)
+            if (d) return d
+          }
+        }
+        return null
+      }
+      return findDup(freshTree.root as NodeConfig)
+    })()
+    if (dup) {
+      setMsg(`Errore: ${dup}`)
+      return
+    }
+    const preset = buildPresetForTree(useBtStore.getState)
+    const targetName = nameDraft.trim() || freshTree.name
+    const toSave = {
+      ...freshTree,
+      name: targetName,
+      root: { ...freshTree.root, name: targetName },
+      preset,
+    } as unknown as typeof tree
+    try {
+      const r = await strategiesApi.create(toSave)
+      setSavedId(r.id)
+      setTree(r.tree as unknown as typeof tree)
+      setMsg(`saved as new #${r.id}`)
+      refreshList()
+    } catch (e) {
+      const m = String(e)
+      if (m.includes('409') && m.includes('already exists')) setMsg(`Errore: '${targetName}' già esistente — cambia nome`)
+      else setMsg(m)
     }
   }
 
@@ -140,7 +224,7 @@ export default function BuilderView() {
     if (!tree) return
     const v = nameDraft.trim()
     if (!v || v === tree.name) return
-    setTree({ ...tree, name: v })
+    setTree({ ...tree, name: v, root: { ...tree.root, name: v } })
   }
 
   const onDragStart = (e: DragStartEvent) => {
@@ -240,10 +324,13 @@ export default function BuilderView() {
           placeholder="strategy name"
         />
         <button onClick={handleSave} type="button" style={S.btnPri}>
-          Save
+          Salva
+        </button>
+        <button onClick={handleSaveAsNew} type="button" style={S.btn}>
+          Salva come nuova
         </button>
         <button onClick={handleNew} type="button" style={S.btn}>
-          New
+          Nuova
         </button>
         <select value={loadId} onChange={(e) => setLoadId(e.target.value)} style={S.input as unknown as Record<string, string>}>
           <option value="">— load —</option>

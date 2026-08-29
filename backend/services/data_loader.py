@@ -30,7 +30,13 @@ def fetch_ffn(tickers: list[str], start: str | None = None, end: str | None = No
         df = df.to_frame(tickers[0])
     if not isinstance(df.index, pd.DatetimeIndex):
         df.index = pd.to_datetime(df.index)
-    return df.sort_index()
+    df = df.sort_index()
+    # ponytail: normalize ticker columns to upper case so Strategy Security names (AAPL) match price DataFrame
+    try:
+        df.columns = [str(c).upper() for c in df.columns]
+    except Exception:
+        pass
+    return df
 
 
 def validate_data(df: pd.DataFrame, expected_columns: list[str] | None = None) -> None:

@@ -12,15 +12,23 @@ const S = {
 
 export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number) => void }) {
   const tree = useBtStore((s) => s.tree)
-  const [priceId, setPriceId] = useState('')
-  const [capital, setCapital] = useState(100000)
-  const [integerPos, setIntegerPos] = useState(false)
-  const [simpleFn, setSimpleFn] = useState('')
+  const priceSourceId = useBtStore((s) => s.priceSourceId)
+  const setPriceSourceId = useBtStore((s) => s.setPriceSourceId)
+  const backtestConfig = useBtStore((s) => s.backtestConfig)
+  const setBacktestConfig = useBtStore((s) => s.setBacktestConfig)
+  const extraSourceIds = useBtStore((s) => s.extraSourceIds)
+  const indicatorSourceIds = useBtStore((s) => s.indicatorSourceIds)
+  const setIndicatorSourceIds = useBtStore((s) => s.setIndicatorSourceIds)
   const [sources, setSources] = useState<DataSourceRow[]>([])
   const [indicators, setIndicators] = useState<DataSourceRow[]>([])
   const [msg, setMsg] = useState('')
   const [progress, setProgress] = useState(0)
   const [running, setRunning] = useState(false)
+  // derived string for select
+  const priceId = priceSourceId != null ? String(priceSourceId) : ''
+  const capital = backtestConfig.initial_capital
+  const integerPos = backtestConfig.integer_positions
+  const simpleFn = backtestConfig.simple_fn
 
   useEffect(() => {
     dataApi
@@ -68,8 +76,30 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
       integer_positions: integerPos,
       commission: { type: 'simple', simple_fn: simpleFn || null },
     }
+    // ponytail: union of stored preset indicators + those actually referenced in tree algos
+    const referencedIds = (() => {
+      const ids = new Set<number>(indicatorSourceIds)
+      const walk = (node: unknown) => {
+        if (!node || typeof node !== 'object') return
+        const n = node as Record<string, unknown>
+        if (Array.isArray(n.algos)) {
+          for (const a of n.algos as Array<Record<string, unknown>>) {
+            const params = a.params as Record<string, unknown> | undefined
+            if (params) for (const v of Object.values(params)) if (typeof v === 'string' && /^\d+$/.test(v.trim())) ids.add(Number(v))
+          }
+        }
+        if (Array.isArray(n.children)) for (const c of n.children) walk(c)
+        if (n.root) walk(n.root)
+      }
+      walk(tree as unknown)
+      return [...ids].filter((id) => indicators.some((ind) => ind.id === id))
+    })()
+    // persist referenced union for next reload completeness
+    if (referencedIds.length !== indicatorSourceIds.length || referencedIds.some((id, i) => id !== indicatorSourceIds[i])) {
+      setIndicatorSourceIds(referencedIds)
+    }
     try {
-      const res = await backtestApi.create({ tree, config, price_source_id: Number(priceId), extra_source_ids: {}, indicator_source_ids: indicators.map((i) => i.id) })
+      const res = await backtestApi.create({ tree, config, price_source_id: Number(priceId), extra_source_ids: extraSourceIds, indicator_source_ids: referencedIds })
       const id = res.id
       onRunCreated?.(id)
       setMsg(`run #${id} started`)
@@ -121,7 +151,7 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
     <div style={S.wrap}>
       <div style={{ fontWeight: 700, marginBottom: 8 }}>Run Backtest</div>
       <label style={S.label}>Price source</label>
-      <select style={S.input} value={priceId} onChange={(e) => setPriceId(e.target.value)}>
+      <select style={S.input} value={priceId} onChange={(e) => setPriceSourceId(e.target.value ? Number(e.target.value) : null)}>
         <option value="">— select —</option>
         {priceSources.map((s) => (
           <option key={s.id} value={String(s.id)}>
@@ -130,16 +160,16 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
         ))}
       </select>
       <label style={{ ...S.label, marginTop: 8 }}>Initial capital</label>
-      <input style={S.input} type="number" value={capital} onChange={(e) => setCapital(Number(e.target.value))} />
+      <input style={S.input} type="number" value={capital} onChange={(e) => setBacktestConfig({ initial_capital: Number(e.target.value) })} />
       <label style={{ ...S.label, marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <input type="checkbox" checked={integerPos} onChange={(e) => setIntegerPos(e.target.checked)} />
+        <input type="checkbox" checked={integerPos} onChange={(e) => setBacktestConfig({ integer_positions: e.target.checked })} />
         integer positions
       </label>
       <label style={{ ...S.label, marginTop: 8 }}>Commission simple_fn (lambda q,p: ...)</label>
       <textarea
         style={{ ...S.input, minHeight: 60, fontFamily: 'monospace', fontSize: 12 }}
         value={simpleFn}
-        onChange={(e) => setSimpleFn(e.target.value)}
+        onChange={(e) => setBacktestConfig({ simple_fn: e.target.value })}
         placeholder="lambda q,p: max(1, abs(q)*0.01)"
       />
       {fnError && <div style={{ color: '#f85149', fontSize: 12, marginTop: 4 }}>{fnError}</div>}

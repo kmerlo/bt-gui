@@ -30,18 +30,40 @@ def _upload_prices(c: TestClient, name: str) -> int:
 
 
 def test_list_indicators_empty():
-    # Clean existing indicators from prior test runs
+    # Only clean *test* artifacts, NEVER user data (see AGENTS.md §9)
     from backend.database import DataSource as DBSource
     from backend.database import SessionLocal
+    from sqlalchemy import or_
+
     db = SessionLocal()
     try:
-        db.query(DBSource).filter(DBSource.type == "indicator").delete()
+        # ✅ cancella solo prefissi di test; MAI filter(type == "indicator")
+        # use startswith (LIKE 'prefix%') so '_' is not a wildcard
+        db.query(DBSource).filter(
+            or_(
+                DBSource.name.startswith("test_"),
+                DBSource.name.startswith("tmp_"),
+                DBSource.name.startswith("mock_"),
+                DBSource.name.startswith("ind_"),
+                DBSource.name.startswith("smatest_"),
+                DBSource.name.startswith("listtest_"),
+                DBSource.name.startswith("prevtest_"),
+                DBSource.name.startswith("valtest_"),
+            )
+        ).delete(synchronize_session=False)
         db.commit()
     finally:
         db.close()
     r = client.get("/api/bt/indicators")
     assert r.status_code == 200
-    assert r.json() == []
+    # Non asserire lista vuota globale (potrebbero esserci indicatori utente come sma50);
+    # verifica solo che l'endpoint risponde con una lista e che non siano rimasti artefatti di test
+    body = r.json()
+    assert isinstance(body, list)
+    assert not any(
+        n.startswith(("test_", "tmp_", "mock_", "ind_", "smatest_", "listtest_", "prevtest_", "valtest_"))
+        for n in [x["name"] for x in body]
+    )
 
 
 def test_compute_indicator_sma():

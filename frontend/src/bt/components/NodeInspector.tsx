@@ -53,6 +53,26 @@ export default function NodeInspector() {
     }
   }, [node?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // flush drafts before save (BuilderView dispatches 'bt-before-save')
+  useEffect(() => {
+    const flush = () => {
+      // params
+      if (node?.id) {
+        try {
+          const parsed = paramsDraft.trim() ? (JSON.parse(paramsDraft) as Record<string, unknown>) : {}
+          updateNode(node.id!, { params: parsed as unknown as typeof node.params })
+          setParamsErr('')
+        } catch {
+          /* keep error, don't overwrite store */
+        }
+        const v = nameDraft.trim()
+        if (v && v !== node.name) updateNode(node.id!, { name: v })
+      }
+    }
+    window.addEventListener('bt-before-save', flush)
+    return () => window.removeEventListener('bt-before-save', flush)
+  }, [node?.id, paramsDraft, nameDraft, updateNode, node?.name])
+
   // keep draft in sync if node changes externally (but not while editing name)
   // we only reset on id change above
 
@@ -105,7 +125,23 @@ export default function NodeInspector() {
 
       <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <span style={S.label}>params (JSON)</span>
-        <textarea value={paramsDraft} onChange={(e) => setParamsDraft(e.target.value)} onBlur={commitParams} style={S.textarea} />
+        <textarea
+          value={paramsDraft}
+          onChange={(e) => {
+            const v = e.target.value
+            setParamsDraft(v)
+            // ponytail: sync immediately when JSON valid, so Save before blur not lost
+            try {
+              const parsed = v.trim() ? (JSON.parse(v) as Record<string, unknown>) : {}
+              setParamsErr('')
+              if (node?.id) updateNode(node.id!, { params: parsed as unknown as typeof node.params })
+            } catch (err) {
+              setParamsErr(String(err))
+            }
+          }}
+          onBlur={commitParams}
+          style={S.textarea}
+        />
         {paramsErr && <span style={{ color: '#f85149', fontSize: 12 }}>{paramsErr}</span>}
       </label>
 

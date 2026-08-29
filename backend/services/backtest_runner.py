@@ -69,6 +69,49 @@ def _build_commission(cfg: BacktestConfig):  # type: ignore[no-untyped-def]
     return None
 
 
+def _norm_columns(df: pd.DataFrame | None) -> pd.DataFrame | None:
+    if df is None or df.empty:
+        return df
+    try:
+        df.columns = [str(c).upper() for c in df.columns]  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    return df
+
+
+def _collect_security_names(node) -> set[str]:
+    names: set[str] = set()
+    try:
+        if getattr(node, "type", None) in ("Security", "HedgeSecurity", "CouponPayingSecurity"):
+            names.add(str(getattr(node, "name", "")).upper())
+        for ch in getattr(node, "children", []) or []:
+            names.update(_collect_security_names(ch))
+        # also handle StrategyTree root wrapper
+        if hasattr(node, "root"):
+            names.update(_collect_security_names(node.root))
+    except Exception:
+        pass
+    return names
+
+
+def _normalize_tree(tree: StrategyTree) -> StrategyTree:
+    # ponytail: upper-case Security names so they match normalized price columns
+    try:
+        import copy
+
+        t = copy.deepcopy(tree)
+        stack = [t.root]
+        while stack:
+            n = stack.pop()
+            if getattr(n, "type", None) in ("Security", "HedgeSecurity", "CouponPayingSecurity"):
+                n.name = str(n.name).upper()
+            for ch in getattr(n, "children", []) or []:
+                stack.append(ch)
+        return t
+    except Exception:
+        return tree
+
+
 def run_backtest_sync(
     run_id: int,
     tree: StrategyTree,
@@ -83,6 +126,30 @@ def run_backtest_sync(
 
     _set_progress(run_id, {"progress": 0.1, "done": False})
     try:
+        # ponytail: normalize all DataFrame columns to upper case so ffn lower-case does not mismatch Strategy names (AAPL)
+        price_df = _norm_columns(price_df)  # type: ignore[assignment]
+        if additional:
+            for k in list(additional.keys()):
+                additional[k] = _norm_columns(additional[k])
+        volume = _norm_columns(volume)
+        volatility = _norm_columns(volatility)
+        # normalize indicator columns and filter to strategy members to avoid KeyError when signal has extra tickers
+        member_names = _collect_security_names(tree)
+        if indicators:
+            normed: dict[str, pd.DataFrame] = {}
+            for iid, df in indicators.items():
+                df = _norm_columns(df)  # type: ignore[assignment]
+                if df is not None and not df.empty and member_names:
+                    # keep only columns that are actual members (intersection); if none match keep original to not hide error
+                    keep = [c for c in df.columns if str(c).upper() in member_names]
+                    if keep and len(keep) != len(df.columns):
+                        try:
+                            df = df[keep]
+                        except Exception:
+                            pass
+                normed[iid] = df  # type: ignore[assignment]
+            indicators = normed
+        tree = _normalize_tree(tree)
         strategy = to_bt_strategy(tree, indicators or {})
         commissions = _build_commission(cfg)
         bt_obj = bt.Backtest(

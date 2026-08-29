@@ -5,6 +5,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
+from backend.models.backtest_config import BacktestConfig
+
 
 class AlgoConfig(BaseModel):
     class_name: str
@@ -20,7 +22,16 @@ class NodeConfig(BaseModel):
     children: list[NodeConfig] = []
 
 
+class BuilderPreset(BaseModel):
+    price_source_id: int | None = None
+    extra_source_ids: dict[str, int] = Field(default_factory=dict)
+    indicator_source_ids: list[int] = Field(default_factory=list)
+    config: BacktestConfig = Field(default_factory=BacktestConfig)  # type: ignore[call-arg]
+    selected_node_id: str | None = None
+
+
 class StrategyTree(BaseModel):
     name: str
     root: NodeConfig
     version: int = 1
+    preset: BuilderPreset | None = None
