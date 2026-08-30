@@ -77,15 +77,16 @@ FE standalone usa `react-router` o lo stesso hash-routing di `Stocks_App/fronten
 class NodeConfig(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     name: str
-    type: Literal["Strategy", "Security", "FixedIncomeStrategy",
-                  "HedgeSecurity", "CouponPayingSecurity"]
+    type: Literal["Strategy", "Security", "FixedIncomeStrategy", "HedgeSecurity", "CouponPayingSecurity"]
     params: Dict[str, Any] = {}  # e.g. {"multiplier": 1.0}
     algos: List[AlgoConfig] = []  # only for Strategy types
     children: List["NodeConfig"] = []
 
+
 class AlgoConfig(BaseModel):
     class_name: str  # "RunMonthly", "WeighEqually", ...
     params: Dict[str, Any] = {}
+
 
 class StrategyTree(BaseModel):
     name: str
@@ -99,6 +100,7 @@ class CommissionConfig(BaseModel):
     type: Literal["simple", "bidoffer"] = "simple"
     simple_fn: Optional[str] = None  # "lambda q, p: max(1, abs(q)*0.01)" — validato, non eval libero
     use_bidoffer: bool = False
+
 
 class BacktestConfig(BaseModel):
     initial_capital: float = 1_000_000.0
@@ -131,6 +133,7 @@ class Strategy(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, onupdate=datetime.utcnow)
 
+
 class DataSource(Base):
     __tablename__ = "data_sources"
     id = Column(Integer, primary_key=True)
@@ -140,6 +143,7 @@ class DataSource(Base):
     path_or_tickers = Column(String)
     meta_json = Column(JSON)
     parquet_blob = Column(LargeBinary)
+
 
 class BacktestRun(Base):
     __tablename__ = "backtest_runs"
@@ -304,10 +308,10 @@ bt-gui/                          # repo separato, uv
 ## 9. Open Decisions (aggiornate)
 
 1. **Router FE standalone**: `react-router` vs hash-routing `App.tsx:42` di Stocks_App — hash è più facile da portare, react-router più standard. Default: hash per v1.
-2. **ffn vs yfinance**: SPEC usa `ffn`, Stocks_App usa `yfinance`. `data_loader.py` astrae con adapter — v1 `ffn`, adapter `yfinance` in Fase 7 se serve.
+2. **ffn vs yfinance**: `yfinance` è canonico dal 2026-08 (`backend/services/data_loader.py:78` `fetch_and_store_yf` → `price_data`), `ffn` è adapter legacy (`fetch_ffn` mantenuto per compat). Allineato a `Stocks_App` (yfinance).
 3. **Template built-in**: momentum / mean-reversion / risk-parity / pairs — sì, 3 template in v1 (coprono 80% test).
-4. **Export `.py`**: sì, `StrategyTree → .py` via `tree_serializer` (utile per utenti `bt` puri).
-5. **Heatmap weights**: `lightweight-charts` non ha heatmap nativa — usare `chart.js` (già in Stocks_App) o `echarts` solo per quel pannello.
+4. **Export `.py`**: deferred — `StrategyTree → .py` via `tree_serializer` rimandato (vedi direction 011), non in v1.
+5. **Heatmap weights**: deferred — `lightweight-charts` non ha heatmap nativa; `chart.js` era opzionale ma rimosso in plan 008 (`frontend/package.json` non lo contiene più). Heatmap deferred.
 
 ---
 
@@ -327,6 +331,7 @@ dependencies = [
     "pandas>=2.0",
     "numpy>=1.26,<3.0",
     "ffn>=1.1.2",
+    "yfinance>=1.0,<2",      # canonical price fetcher (price_data)
     "python-multipart>=0.0.9",  # upload CSV/Parquet
     "aiofiles>=23.0",
     "websockets>=12.0",
@@ -346,7 +351,6 @@ dev = ["pytest>=8", "httpx>=0.28", "ruff>=0.8", "mypy>=1.10"]
     "@dnd-kit/sortable": "^8.0.0",
     "@monaco-editor/react": "^4.7.0",
     "lightweight-charts": "^5.0.0",
-    "chart.js": "^4.5.1",
     "zustand": "^5.0.0"
   },
   "devDependencies": {
@@ -357,7 +361,7 @@ dev = ["pytest>=8", "httpx>=0.28", "ruff>=0.8", "mypy>=1.10"]
   }
 }
 ```
-`chart.js` riusato da Stocks_App solo per heatmap; se non serve, rimuovibile.
+`chart.js` rimosso in plan 008 (era solo per heatmap deferred).
 
 ---
 
@@ -365,12 +369,12 @@ dev = ["pytest>=8", "httpx>=0.28", "ruff>=0.8", "mypy>=1.10"]
 
 - [ ] Creare albero strategie visualmente (drag-drop, anche annidato)
 - [ ] Comporre algo stack con form auto-generati + validazione
-- [ ] Caricare dati via CSV/Parquet o `ffn` (con validazione allineamento)
-- [ ] Configurare backtest (capitale, `simple_fn` validata, `integer_positions`)
+- [ ] Caricare dati via CSV/Parquet o `yfinance` (`price_data` canonico, `ffn` legacy)
+- [ ] Configurare backtest (capitale, `simple_fn` whitelist, `integer_positions`)
 - [ ] Lanciare backtest con progress WS live + cancel
 - [ ] Vedere risultati: equity, weights, metriche `Result.stats`, transactions, drawdown
 - [ ] Salvare/caricare strategie da SQLite
-- [ ] Confrontare multi-run (overlay + tabella)
+- [ ] Confrontare multi-run (overlay + tabella) — deferred, single-run in v1
 - [ ] `uv run uvicorn backend.main:app --port 8001` + `npm run dev -- --port 3001` funzionanti
 - [ ] `APIRouter(prefix="/api/bt")` importabile in Stocks_App senza modifiche al FE `bt-gui`
 

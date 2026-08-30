@@ -75,6 +75,7 @@ In `Stocks_App/backend/main.py`, trova `app = FastAPI()` e dopo tutte le route e
 # bt-gui integration — APIRouter isolato, non tocca route esistenti
 try:
     from bt_gui.api.routes import router as bt_router  # or from backend.api.routes if bt-gui installed as package
+
     app.include_router(bt_router)
 except ImportError:
     pass  # bt-gui not installed — optional feature

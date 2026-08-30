@@ -10,6 +10,8 @@ app = FastAPI(title="bt-gui", version="0.1.0")
 @app.on_event("startup")
 def _init_db():
     init_db()
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:5173"],

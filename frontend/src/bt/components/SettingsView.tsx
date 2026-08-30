@@ -61,18 +61,13 @@ export default function SettingsView() {
   }
 
   const handleSave = () => {
-    // validate simple_fn
     if (settings.simple_fn.trim()) {
-      try {
-        const fn = eval(settings.simple_fn) as unknown // eslint-disable-line no-eval
-        if (typeof fn !== 'function' || (fn as (...args: unknown[]) => unknown).length < 2) {
-          setSaveMsg('simple_fn deve essere lambda (q,p) — es: lambda q,p: max(1, abs(q)*0.01)')
-          return
-        }
-      } catch (e) {
-        setSaveMsg(String(e))
+      const ok = /^\s*lambda\s+\w+\s*,\s*\w+\s*:/.test(settings.simple_fn)
+      if (!ok) {
+        setSaveMsg('simple_fn deve essere lambda (q,p) — es: lambda q,p: q*p*0.001')
         return
       }
+      // validazione completa al salvataggio (BE)
     }
     saveSettings(settings)
     setSaveMsg('salvato')
@@ -203,6 +198,13 @@ export default function SettingsView() {
         <div style={S.row}>
           <span style={S.label}>Integer positions</span>
           <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}><input type="checkbox" checked={settings.integer_positions} onChange={(e) => setSettings({ ...settings, integer_positions: e.target.checked })} /> abilita</label>
+        </div>
+        <div style={S.row}>
+          <span style={S.label}>Price column default</span>
+          <select style={S.input} value={settings.price_column} onChange={(e) => setSettings({ ...settings, price_column: e.target.value as 'close' | 'adj_close' })}>
+            <option value="adj_close">Adj Close</option>
+            <option value="close">Close</option>
+          </select>
         </div>
         <div style={{ marginBottom: 8 }}>
           <div style={S.label}>Commission simple_fn</div>

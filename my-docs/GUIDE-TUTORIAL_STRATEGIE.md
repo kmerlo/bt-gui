@@ -10,30 +10,30 @@ Questo tutorial guida passo passo alla replica dell'esempio *SMA Strategy* tratt
 
 ---
 
-## Step 1 — caricare i dati di prezzo
+## Step 1 — caricare i dati di prezzo (Ticker Catalog yfinance)
 
-1. Nel menu in alto cliccare **Data**.
-2. Campo **tickers**: `AAPL,MSFT,C,GS,GE`
+1. Nel menu cliccare **Ticker Catalog** (vista Data).
+2. Campo **TICKER**: `AAPL` (per multi-ticker inserire `AAPL,MSFT,C,GS,GE` e ripetere fetch per ciascuno — yfinance canon è per singolo symbol via `priceDataApi.fetch` / `fetch_and_store_yf` in `backend/services/data_loader.py:78`).
 3. **Start**: `2010-01-01` — lasciar vuoto End per ora.
-4. Cliccare **Fetch FFN**.
-5. Alla comparsa della riga nella tabella, prendere nota dell'**id** (es. `#3`).
+4. Cliccare **Fetch** (yfinance).
+5. Alla comparsa della riga nella tabella, verificare `count` >0. Ripetere per `MSFT,C,GS,GE`.
 
-> Il prezzo è scaricato da `ffn.get()` e salvato come DataSource di tipo `price`. Serve per il backtest e per il calcolo degli indicatori.
+> Il prezzo è scaricato da `yfinance.download()` e salvato in `price_data` (tabella canonical `symbol/date/OHLCV`). Non più `data_sources.parquet_blob` né `ffn.get()` (ffn resta solo come adapter legacy in `backend/services/data_loader.py:21` `fetch_ffn`). I ticker vengono da `price_data` e sono usati dal backtest via `_load_prices_from_db`.
 
 ---
 
 ## Step 2 — pre-calcolare l'indicatore SMA(50)
 
-1. Tornare in **Builder** e cliccare il bottone **Indicators** nella barra in alto (si attiva il pannello laterale destro).
+1. Tornare in **Builder** e aprire il pannello **Indicators** (toolbar).
 2. Nel pannello **Indicators**:
-   - **Price source**: selezionare il prezzo caricato allo step 1.
-   - **Indicator**: selezionare **SMA**.
-   - **Period**: impostare `50`.
-   - **Name** (opzionale): `sma50_aapl_msft_c_gs_ge`.
+   - **Symbol**: selezionare `AAPL` (o uno dei ticker caricati — i dati vengono da `price_data` via yfinance, non da `data_sources` price blob).
+   - **Indicator**: `SMA`.
+   - **Period**: `50`.
+   - **Name** (opzionale): `sma50_aapl`.
 3. Cliccare **Compute & Save**.
-4. Nell'elenco **Saved** sotto il form comparirà l'indicatore con etichetta `sma_50`.
+4. L'indicatore è salvato come DataSource `type='indicator'` e come righe in `price_data`-derivato; compare in lista con tag `sma_50`. Per multi-ticker ripetere per ciascuno o usare `SelectWhere` con segnale globale.
 
-> L'indicatore è salvato come DataSource di tipo `indicator`, fonte `computed`. L'ID numerico associato è quello che servirà nello Step 4.
+> I ticker per l'indicatore vengono da `price_data` (yfinance), non più da `path_or_tickers` ffn. L'ID numerico dell'indicatore serve nello Step 4.
 
 ---
 
@@ -110,4 +110,4 @@ I valori attesi (riassunto dall'esempio bt originale):
 - **Confrontare periodi SMA diversi** (10, 20, 40): ripetere gli Step 2–5 cambiando solo il parametro `period` dell'SMA e creando strategie separate da salvare con nomi distinti (`sma10`, `sma20`, ecc.).
 - **Benchmark SPY**: creare una seconda strategia con solo `RunMonthly` + `SelectAll` + `WeighEqually` + `Rebalance` sul ticker `SPY` per confrontare il buy-and-hold Equal Weight con la strategia SMA.
 - **Salvare la strategia**: prima di chiudere, cliccare **Save** nella toolbar per persistere l'albero in SQLite. Riaprire con **Load** → selezionare dal menu a tendina → **Load**.
-- **Export futuro**: quando disponibile, il pulsante Esporta genererà uno script Python `.py` riutilizzabile standalone con `bt`.
+ - **Export futuro** (deferred): `StrategyTree → .py` via `tree_serializer` è rimandato — vedi `plans/SPEC.md` §9. Per ora usare Save/Export JSON.

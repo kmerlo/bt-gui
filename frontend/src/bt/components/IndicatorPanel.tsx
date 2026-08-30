@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { dataApi, type DataSourceRow, type IndicatorDef } from '../../api/bt'
+import { dataApi, priceDataApi, type IndicatorDef, type PriceTickerRow } from '../../api/bt'
 
 const S = {
   wrap: {
@@ -27,7 +27,6 @@ const S = {
   err: { fontSize: 11, color: '#f85149' },
   list: { display: 'flex', flexDirection: 'column' as const, gap: 4 },
   listItem: { border: '1px solid #30363d', borderRadius: 6, background: '#161b22', padding: '6px 8px', fontSize: 12, color: '#c9d1d9', cursor: 'pointer' },
-  listItemActive: { border: '1px solid #58a6ff', background: '#1f2b3a' },
 }
 
 function paramInputs(def: IndicatorDef, values: Record<string, unknown>, onChange: (patch: Record<string, unknown>) => void) {
@@ -45,59 +44,49 @@ function paramInputs(def: IndicatorDef, values: Record<string, unknown>, onChang
 }
 
 export default function IndicatorPanel() {
-  const [priceSources, setPriceSources] = useState<DataSourceRow[]>([])
-  const [indicators, setIndicators] = useState<DataSourceRow[]>([])
+  const [tickers, setTickers] = useState<PriceTickerRow[]>([])
+  const [indicators, setIndicators] = useState<{ id: number; name: string; meta: Record<string, unknown> }[]>([])
   const [defs, setDefs] = useState<IndicatorDef[]>([])
-  const [selPriceId, setSelPriceId] = useState('')
+  const [selTicker, setSelTicker] = useState('')
   const [selType, setSelType] = useState('')
   const [params, setParams] = useState<Record<string, unknown>>({})
   const [nameDraft, setNameDraft] = useState('')
   const [msg, setMsg] = useState('')
   const [computing, setComputing] = useState(false)
-  const [activeIndId, setActiveIndId] = useState<number | null>(null)
 
   useEffect(() => {
-    dataApi.list().then((rows) => {
-      setPriceSources(rows.filter((r) => r.type === 'price'))
-      setIndicators(rows.filter((r) => r.type === 'indicator'))
-    }).catch(() => { /* ignore */ })
+    priceDataApi.list().then(setTickers).catch(() => { /* ignore */ })
     dataApi.getIndicatorDefs().then(setDefs).catch(() => { /* ignore */ })
+    dataApi.listIndicators().then((rows) =>
+      setIndicators(rows.map((r) => ({ id: r.id, name: r.name, meta: r.meta })))
+    ).catch(() => { /* ignore */ })
   }, [])
 
   const selectedDef = defs.find((d) => d.type === selType) ?? null
 
   const handleCompute = async () => {
-    if (!selPriceId) { setMsg('select price source'); return }
+    if (!selTicker) { setMsg('select ticker'); return }
     if (!selType) { setMsg('select indicator type'); return }
     setComputing(true)
     setMsg('')
     try {
+      const t = tickers.find((r) => r.symbol === selTicker)
       const r = await dataApi.computeIndicator({
-        price_source_id: Number(selPriceId),
+        symbol: selTicker,
+        start: t?.start || undefined,
+        end: t?.end || undefined,
         type: selType,
         params,
         save: true,
         name: nameDraft.trim() || undefined,
       })
       setMsg(`saved ${r.name}`)
-      setIndicators((prev) => [{ id: r.id, name: r.name, type: 'indicator', source: 'computed', meta: r.meta, path_or_tickers: '' }, ...prev])
+      setIndicators((prev) => [{ id: r.id, name: r.name, meta: r.meta }, ...prev])
       setNameDraft('')
-      setActiveIndId(r.id)
     } catch (e) {
       setMsg(String(e))
     } finally {
       setComputing(false)
-    }
-  }
-
-  const handlePreview = async (id: number) => {
-    setActiveIndId(id)
-    try {
-      const p = await dataApi.preview(id)
-      // preview shown inline below the list
-      void p
-    } catch {
-      /* ignore */
     }
   }
 
@@ -106,11 +95,11 @@ export default function IndicatorPanel() {
       <div style={S.title}>Indicators</div>
 
       <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <span style={S.label}>Price source</span>
-        <select value={selPriceId} onChange={(e) => setSelPriceId(e.target.value)} style={S.select}>
+        <span style={S.label}>Ticker</span>
+        <select value={selTicker} onChange={(e) => setSelTicker(e.target.value)} style={S.select}>
           <option value="">— select —</option>
-          {priceSources.map((s) => (
-            <option key={s.id} value={String(s.id)}>#{s.id} {s.name}</option>
+          {tickers.map((t) => (
+            <option key={t.symbol} value={t.symbol}>{t.symbol} ({t.count} rows)</option>
           ))}
         </select>
       </label>
@@ -150,16 +139,12 @@ export default function IndicatorPanel() {
           </div>
           <div style={S.list}>
             {indicators.map((ind) => (
-              <div
-                key={ind.id}
-                style={{ ...S.listItem, ...(activeIndId === ind.id ? S.listItemActive : {}) }}
-                onClick={() => handlePreview(ind.id)}
-              >
+              <div key={ind.id} style={S.listItem}>
                 <div style={S.row}>
                   <span style={{ flex: 1 }}>{ind.name}</span>
-                  <span style={S.badge}>{String((ind.meta as Record<string, unknown>)?.indicator_type ?? '?')}</span>
+                  <span style={S.badge}>{String(ind.meta?.indicator_type ?? '?')}</span>
                 </div>
-                {Boolean((ind.meta as Record<string, unknown>)?.params) && (
+                {Boolean(ind.meta?.params) && (
                   <div style={{ fontSize: 11, color: '#8b949e', marginTop: 2 }}>
                     {Object.entries(ind.meta.params as Record<string, unknown>).map(([k, v]) => `${k}=${v}`).join(', ')}
                   </div>

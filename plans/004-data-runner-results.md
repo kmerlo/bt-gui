@@ -76,6 +76,7 @@ Senza dati e runner, il builder di plan 003 è un mock. Questo piano chiude il l
 import io, pandas as pd, ffn
 from fastapi import UploadFile
 
+
 def load_csv(file: UploadFile) -> pd.DataFrame:
     # expects CSV with Date index col + one col per security (header = security names)
     # Try parse: first col as Date, rest as float
@@ -84,23 +85,30 @@ def load_csv(file: UploadFile) -> pd.DataFrame:
     df.index = pd.to_datetime(df.index)
     return df.sort_index()
 
+
 def load_parquet(file: UploadFile) -> pd.DataFrame:
     content = file.file.read()
     return pd.read_parquet(io.BytesIO(content))
 
+
 def fetch_ffn(tickers: list[str], start: str, end: str) -> pd.DataFrame:
     # ffn.get(tickers, start, end) → DataFrame
     import ffn
+
     df = ffn.get(",".join(tickers), start=start, end=end)
     # ffn may return Series for single ticker — normalize to DataFrame
     if isinstance(df, pd.Series):
         df = df.to_frame(tickers[0])
     return df
 
+
 def validate_data(df: pd.DataFrame, expected_columns: list[str] | None = None) -> None:
-    if df.empty: raise ValueError("empty DataFrame")
-    if not isinstance(df.index, pd.DatetimeIndex): raise ValueError("index must be DateTimeIndex")
-    if df.isna().all().all(): raise ValueError("all NaN")
+    if df.empty:
+        raise ValueError("empty DataFrame")
+    if not isinstance(df.index, pd.DatetimeIndex):
+        raise ValueError("index must be DateTimeIndex")
+    if df.isna().all().all():
+        raise ValueError("all NaN")
     if expected_columns and set(df.columns) != set(expected_columns):
         # soft warning — caller decides 422 vs allow
         pass
@@ -113,33 +121,49 @@ from fastapi import UploadFile, File, Depends
 from backend.services.data_loader import load_csv, load_parquet, fetch_ffn
 from backend.database import get_db, DataSource as DBSource
 
+
 @router.post("/data-sources/upload", status_code=201)
 def upload_data_source(name: str, type: str, file: UploadFile = File(...), db=Depends(get_db)):
     # type in {"price","volume","volatility","bidoffer",...}
-    if file.filename.endswith(".csv"): df = load_csv(file)
-    elif file.filename.endswith(".parquet"): df = load_parquet(file)
-    else: raise HTTPException(400, "only .csv/.parquet")
+    if file.filename.endswith(".csv"):
+        df = load_csv(file)
+    elif file.filename.endswith(".parquet"):
+        df = load_parquet(file)
+    else:
+        raise HTTPException(400, "only .csv/.parquet")
     # persist: parquet bytes + meta
-    buf = io.BytesIO(); df.to_parquet(buf); blob = buf.getvalue()
+    buf = io.BytesIO()
+    df.to_parquet(buf)
+    blob = buf.getvalue()
     meta = {"shape": list(df.shape), "columns": list(df.columns), "start": str(df.index[0]), "end": str(df.index[-1])}
     row = DBSource(name=name, type=type, source="csv" if file.filename.endswith(".csv") else "parquet", path_or_tickers=file.filename, meta_json=meta, parquet_blob=blob)
-    db.add(row); db.commit(); db.refresh(row)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
     return {"id": row.id, "name": row.name, "meta": meta}
+
 
 @router.post("/data-sources/fetch", status_code=201)
 def fetch_data_source(name: str, type: str, tickers: list[str], start: str, end: str, db=Depends(get_db)):
     df = fetch_ffn(tickers, start, end)
-    buf = io.BytesIO(); df.to_parquet(buf); blob = buf.getvalue()
+    buf = io.BytesIO()
+    df.to_parquet(buf)
+    blob = buf.getvalue()
     meta = {"shape": list(df.shape), "columns": list(df.columns), "start": str(df.index[0]), "end": str(df.index[-1])}
     row = DBSource(name=name, type=type, source="ffn", path_or_tickers=",".join(tickers), meta_json=meta, parquet_blob=blob)
-    db.add(row); db.commit(); db.refresh(row)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
     return {"id": row.id, "name": row.name, "meta": meta}
+
 
 @router.get("/data-sources")
 def list_data_sources(db=Depends(get_db)): ...
 
+
 @router.get("/data-sources/{sid}")
 def get_data_source(sid: int, db=Depends(get_db)): ...
+
 
 @router.get("/data-sources/{sid}/preview")
 def preview_data_source(sid: int, limit: int = 5, db=Depends(get_db)):

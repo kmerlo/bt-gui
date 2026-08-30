@@ -89,11 +89,12 @@ def test_upload_reject_non_csv():
 
 def test_fetch_ffn_mock(monkeypatch):
     app.dependency_overrides.pop(get_db, None)
-    import backend.services.data_loader as dl
 
     idx = pd.date_range("2020-01-01", periods=3)
     mock_df = pd.DataFrame({"AAPL": [100, 101, 102]}, index=idx)
-    monkeypatch.setattr(dl.ffn, "get", lambda tickers, **kw: mock_df)
+    import ffn as _ffn
+
+    monkeypatch.setattr(_ffn, "get", lambda tickers, **kw: mock_df)
     name = f"mock_ffn_{uuid.uuid4().hex[:6]}"
     r = client.post("/api/bt/data-sources/fetch", json={"name": name, "type": "price", "tickers": ["AAPL"], "start": "2020-01-01", "end": "2020-01-03"})
     assert r.status_code == 201, r.text

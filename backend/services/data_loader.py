@@ -55,10 +55,7 @@ def _flatten_yf_df(df: pd.DataFrame) -> pd.DataFrame:
     """Flatten yfinance MultiIndex columns to flat names like 'Open_AAPL'."""
     df = df.reset_index()
     if isinstance(df.columns, pd.MultiIndex):
-        df.columns = [
-            "Date" if p == "Date" else f"{p}_{t}"
-            for p, t in df.columns
-        ]
+        df.columns = ["Date" if p == "Date" else f"{p}_{t}" for p, t in df.columns]
     elif "Date" not in df.columns and len(df.columns) > 0:
         df = df.rename(columns={df.columns[0]: "Date"})
     return df
@@ -66,13 +63,14 @@ def _flatten_yf_df(df: pd.DataFrame) -> pd.DataFrame:
 
 def _row_ohlcv(row: pd.Series, sym: str) -> dict:
     """Extract OHLCV from a flattened yfinance row."""
+
     def get_f(name: str) -> float | None:
         v = row.get(f"{name}_{sym}")
         return float(v) if pd.notna(v) else None
+
     v = row.get(f"Volume_{sym}")
     vol = int(v) if pd.notna(v) else None
-    return {"open": get_f("Open"), "high": get_f("High"), "low": get_f("Low"),
-            "close": get_f("Close"), "adj_close": get_f("Adj Close"), "volume": vol}
+    return {"open": get_f("Open"), "high": get_f("High"), "low": get_f("Low"), "close": get_f("Close"), "adj_close": get_f("Adj Close"), "volume": vol}
 
 
 def fetch_and_store_yf(
@@ -106,10 +104,12 @@ def fetch_and_store_yf(
     sym = symbol.upper()
     existing = {
         row.date: row
-        for row in db.query(DBPriceData).filter(
+        for row in db.query(DBPriceData)
+        .filter(
             DBPriceData.symbol == sym,
             DBPriceData.interval == interval,
-        ).all()
+        )
+        .all()
     }
 
     count = 0

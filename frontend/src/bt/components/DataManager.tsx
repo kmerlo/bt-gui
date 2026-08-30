@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { priceDataApi, type PriceRow, type PriceTickerRow } from '../../api/bt'
+import { applySearch, applySort } from '../../utils/listQuery'
 
 const COLUMNS: { key: keyof PriceTickerRow; label: string }[] = [
   { key: 'symbol', label: 'Symbol' },
@@ -120,20 +121,11 @@ export default function DataManager() {
 
   const sortedFiltered = useMemo(() => {
     let list = [...tickers]
-    // apply filters
     for (const [key, val] of Object.entries(filters)) {
       if (!val) continue
-      list = list.filter((r) => String((r as unknown as Record<string, unknown>)[key]).toLowerCase().includes(val.toLowerCase()))
+      list = applySearch(list, val, [key as keyof PriceTickerRow])
     }
-    // apply sort
-    if (sort.by) {
-      list.sort((a, b) => {
-        const av = a[sort.by as keyof PriceTickerRow]
-        const bv = b[sort.by as keyof PriceTickerRow]
-        const cmp = String(av ?? '').localeCompare(String(bv ?? ''))
-        return sort.dir === 'asc' ? cmp : -cmp
-      })
-    }
+    if (sort.by) list = applySort(list, sort.by, sort.dir)
     return list
   }, [tickers, sort, filters])
 

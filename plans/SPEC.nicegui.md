@@ -62,15 +62,16 @@
 class NodeConfig(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     name: str
-    type: Literal["Strategy", "Security", "FixedIncomeStrategy", 
-                  "HedgeSecurity", "CouponPayingSecurity"]
+    type: Literal["Strategy", "Security", "FixedIncomeStrategy", "HedgeSecurity", "CouponPayingSecurity"]
     params: Dict[str, Any] = {}  # e.g., {"multiplier": 1.0}
     algos: List[AlgoConfig] = []  # only for Strategy types
     children: List["NodeConfig"] = []
 
+
 class AlgoConfig(BaseModel):
     class_name: str  # "RunMonthly", "WeighEqually", ...
     params: Dict[str, Any] = {}
+
 
 class StrategyTree(BaseModel):
     name: str
@@ -87,6 +88,7 @@ class CommissionConfig(BaseModel):
     # Bid/offer: requires bidoffer data source
     use_bidoffer: bool = False
 
+
 class BacktestConfig(BaseModel):
     initial_capital: float = 1_000_000.0
     commission: CommissionConfig = CommissionConfig()
@@ -99,8 +101,7 @@ class BacktestConfig(BaseModel):
 class DataSourceConfig(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     name: str
-    type: Literal["price", "volume", "volatility", "bidoffer", 
-                  "coupons", "cost_long", "cost_short"]
+    type: Literal["price", "volume", "volatility", "bidoffer", "coupons", "cost_long", "cost_short"]
     source: Literal["csv", "parquet", "ffn"]
     path_or_tickers: str  # file path or JSON list of tickers
     meta: Dict[str, Any] = {}  # shape, date_range, columns
@@ -119,6 +120,7 @@ class Strategy(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, onupdate=datetime.utcnow)
 
+
 class DataSource(Base):
     __tablename__ = "data_sources"
     id = Column(Integer, primary_key=True)
@@ -128,6 +130,7 @@ class DataSource(Base):
     path_or_tickers = Column(String)
     meta_json = Column(JSON)
     parquet_blob = Column(LargeBinary)
+
 
 class BacktestRun(Base):
     __tablename__ = "backtest_runs"

@@ -28,7 +28,7 @@ def compute_sma(df: pd.DataFrame, period: int) -> pd.DataFrame:
     if _is_multi_ticker(df):
         # ponytail: multi-ticker as boolean price>sma so SelectWhere gets correct mask (bt example uses data > sma)
         sma = df.rolling(period, min_periods=period).mean()  # type: ignore[attr-defined]
-        return (df > sma)  # type: ignore[operator]
+        return df > sma  # type: ignore[operator]
     close = _close_col(df)
     result = close.rolling(period, min_periods=period).mean()
     return pd.DataFrame({f"sma_{period}": result}, index=df.index)

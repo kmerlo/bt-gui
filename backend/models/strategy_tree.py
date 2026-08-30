@@ -23,7 +23,9 @@ class NodeConfig(BaseModel):
 
 
 class BuilderPreset(BaseModel):
-    price_source_id: int | None = None
+    ticker_start: str | None = None
+    ticker_end: str | None = None
+    price_column: Literal["close", "adj_close"] = "close"
     extra_source_ids: dict[str, int] = Field(default_factory=dict)
     indicator_source_ids: list[int] = Field(default_factory=list)
     config: BacktestConfig = Field(default_factory=BacktestConfig)  # type: ignore[call-arg]

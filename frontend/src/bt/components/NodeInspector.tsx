@@ -19,6 +19,7 @@ const S = {
   title: { fontSize: 13, fontWeight: 700, color: '#c9d1d9' },
   label: { fontSize: 12, color: '#8b949e' },
   input: { background: '#161b22', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, padding: '6px 8px', width: '100%' },
+  select: { background: '#161b22', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, padding: '6px 8px', width: '100%' },
   textarea: {
     background: '#161b22',
     color: '#c9d1d9',
@@ -31,6 +32,7 @@ const S = {
     fontSize: 12,
   },
   badge: { fontSize: 11, padding: '2px 6px', borderRadius: 999, background: '#21262d', border: '1px solid #30363d', color: '#8b949e' },
+  row: { display: 'flex', gap: 6, alignItems: 'center' } as const,
 }
 
 export default function NodeInspector() {
@@ -38,6 +40,12 @@ export default function NodeInspector() {
   const selectedId = useBtStore((s) => s.selectedId)
   const updateNode = useBtStore((s) => s.updateNode)
   const removeNode = useBtStore((s) => s.removeNode)
+  const tickerStart = useBtStore((s) => s.tickerStart)
+  const tickerEnd = useBtStore((s) => s.tickerEnd)
+  const priceColumn = useBtStore((s) => s.priceColumn)
+  const setTickerStart = useBtStore((s) => s.setTickerStart)
+  const setTickerEnd = useBtStore((s) => s.setTickerEnd)
+  const setPriceColumn = useBtStore((s) => s.setPriceColumn)
 
   const node = tree && selectedId ? findNode(tree.root, selectedId) : null
 
@@ -168,6 +176,28 @@ export default function NodeInspector() {
           <div style={S.label}>Algo Stack — {node.algos.length} algos</div>
           <AlgoStack nodeId={node.id!} />
           <div style={S.label}>children: {node.children.length}</div>
+
+          {isRoot && (
+            <>
+              <div style={{ borderTop: '1px solid #21262d', margin: '4px 0' }} />
+              <div style={S.label}>Date range</div>
+              <div style={S.row}>
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontSize: 11, color: '#8b949e' }}>Start</span>
+                  <input type="date" value={tickerStart ?? ''} onChange={(e) => setTickerStart(e.target.value)} style={S.input} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontSize: 11, color: '#8b949e' }}>End</span>
+                  <input type="date" value={tickerEnd ?? ''} onChange={(e) => setTickerEnd(e.target.value)} style={S.input} />
+                </div>
+              </div>
+              <div style={S.label}>Price column</div>
+              <select value={priceColumn} onChange={(e) => setPriceColumn(e.target.value as 'close' | 'adj_close')} style={S.select}>
+                <option value="close">Close</option>
+                <option value="adj_close">Adj Close</option>
+              </select>
+            </>
+          )}
         </>
       )}
 

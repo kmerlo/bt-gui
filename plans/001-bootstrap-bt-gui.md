@@ -175,8 +175,10 @@ DATABASE_URL = "sqlite:///./bt_gui.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine)
 
+
 class Base(DeclarativeBase):
     pass
+
 
 def get_db():
     db = SessionLocal()
@@ -192,14 +194,17 @@ from fastapi import APIRouter
 
 router = APIRouter(prefix="/api/bt", tags=["bt-gui"])
 
+
 @router.get("/health")
 def health():
     return {"status": "ok"}
+
 
 @router.get("/algos")
 def list_algos():
     # stub — plan 003 popola con discover_algos()
     return []
+
 
 @router.get("/algos/{name}/schema")
 def algo_schema(name: str):
@@ -215,6 +220,7 @@ from backend.api.routes import router as bt_router
 app = FastAPI(title="bt-gui", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3001", "http://localhost:5173"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.include_router(bt_router)
+
 
 @app.get("/")
 def root():
@@ -359,6 +365,7 @@ from fastapi.testclient import TestClient
 from backend.main import app
 
 client = TestClient(app)
+
 
 def test_health():
     r = client.get("/api/bt/health")

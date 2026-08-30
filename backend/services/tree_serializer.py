@@ -52,8 +52,7 @@ def _validate_unique_children(cfg: NodeConfig) -> None:
     for c in cfg.children:
         if c.name in seen:
             raise ValueError(
-                f"Duplicate child name '{c.name}' under '{cfg.name}' — Security/Strategy names must be unique per parent. "
-                f"Rename one of them (ids {seen[c.name]} vs {c.id})."
+                f"Duplicate child name '{c.name}' under '{cfg.name}' — Security/Strategy names must be unique per parent. Rename one of them (ids {seen[c.name]} vs {c.id})."
             )
         seen[c.name] = c.id or c.name
         _validate_unique_children(c)

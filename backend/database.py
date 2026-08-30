@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, LargeBinary, String, create_engine
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, JSON, LargeBinary, String, create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 DATABASE_URL_MAIN = "sqlite:///./bt_gui.db"
@@ -14,6 +14,7 @@ engine_main = create_engine(DATABASE_URL_MAIN, connect_args={"check_same_thread"
 engine_test = create_engine(DATABASE_URL_TEST, connect_args={"check_same_thread": False})
 SessionLocal_main = sessionmaker(bind=engine_main)
 SessionLocal_test = sessionmaker(bind=engine_test)
+
 
 # active DB selection persisted in file (so restart keeps choice)
 def _load_active_db() -> str:
@@ -28,6 +29,7 @@ def _load_active_db() -> str:
 
 
 ACTIVE_DB: str = _load_active_db()
+
 
 # backward compat aliases (proxy so imports keep working after switch)
 class _EngineProxy:
@@ -89,6 +91,20 @@ class Strategy(Base):
     tree_json = Column(JSON)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class PriceData(Base):
+    __tablename__ = "price_data"
+    id = Column(Integer, primary_key=True, index=True)
+    symbol = Column(String, index=True)
+    interval = Column(String, index=True, default="1d")
+    date = Column(DateTime, index=True)
+    open = Column(Float, nullable=True)
+    high = Column(Float, nullable=True)
+    low = Column(Float, nullable=True)
+    close = Column(Float, nullable=True)
+    adj_close = Column(Float, nullable=True)
+    volume = Column(Integer, nullable=True)
 
 
 class DataSource(Base):

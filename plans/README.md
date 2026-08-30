@@ -77,3 +77,9 @@ cat plans/001-bootstrap-bt-gui.md   # read fully
 - `APIRouter(prefix="/api/bt")` is the only BE integration surface — keep it isolated.
 - `lightweight-charts` 5 import is `CandlestickSeries` (capital C) — not `candlestickSeries` (see `Stocks_App/AGENTS.md:67`).
 - `plans/` lives in `bt` repo; `bt-gui` is sibling `../bt-gui`. Do not commit `bt-gui` inside `bt`.
+
+## ADR — PriceData canonical (promoted from `.opencode/plans/007-unified-ticker-data.md`)
+
+- **Decision**: `price_data` (symbol/date/OHLCV) è il price store canonico; `data_sources.parquet_blob` resta per indicatori/upload. `yfinance` è fetcher primario via `fetch_and_store_yf`.
+- **Rationale**: separa prezzi (query per ticker/date, pagination) da indicatori (blob), semplifica `_load_prices_from_db` e `priceDataApi`.
+- **Status**: implemented (see `backend/database.py:94` `PriceData`, `backend/api/price_data.py` pagination, `my-docs/GUIDE_documentazione_tecnica.md`).

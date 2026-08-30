@@ -146,9 +146,7 @@ Inserire una riga con data/ora e descrizione della modifica:
 - Cancella **solo ed esclusivamente** quelle righe, con filtro esplicito sul nome:
   ```python
   # ✅ ESEMPIO CORRETTO
-  db.query(DBSource).filter(
-      DBSource.name.like('test\\_%') | DBSource.name.like('tmp\\_%') | DBSource.name.like('mock\\_%')
-  ).delete(synchronize_session=False)
+  db.query(DBSource).filter(DBSource.name.like("test\\_%") | DBSource.name.like("tmp\\_%") | DBSource.name.like("mock\\_%")).delete(synchronize_session=False)
   # ❌ VIETATO
   db.query(DBSource).filter(DBSource.type == "indicator").delete()
   ```

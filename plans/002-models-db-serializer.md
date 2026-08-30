@@ -73,9 +73,11 @@ from typing import Any, Literal
 from uuid import uuid4
 from pydantic import BaseModel, Field
 
+
 class AlgoConfig(BaseModel):
     class_name: str
     params: dict[str, Any] = {}
+
 
 class NodeConfig(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
@@ -84,6 +86,7 @@ class NodeConfig(BaseModel):
     params: dict[str, Any] = {}
     algos: list[AlgoConfig] = []
     children: list[NodeConfig] = []
+
 
 class StrategyTree(BaseModel):
     name: str
@@ -95,6 +98,7 @@ class StrategyTree(BaseModel):
 ```python
 from typing import Literal, Optional
 from pydantic import BaseModel, field_validator
+
 
 class CommissionConfig(BaseModel):
     type: Literal["simple", "bidoffer"] = "simple"
@@ -108,6 +112,7 @@ class CommissionConfig(BaseModel):
             return v
         # Reuse bt/backtest.py:204-213 logic: must be callable source with 2 positional params
         import ast, inspect
+
         try:
             fn = eval(v, {"__builtins__": {}})
         except Exception as e:
@@ -119,6 +124,7 @@ class CommissionConfig(BaseModel):
         if len(params) < 2:
             raise ValueError("commission fn must accept (quantity, price)")
         return v
+
 
 class BacktestConfig(BaseModel):
     initial_capital: float = 1_000_000.0
@@ -132,6 +138,7 @@ class BacktestConfig(BaseModel):
 from typing import Any, Literal, Optional
 from uuid import uuid4
 from pydantic import BaseModel, Field
+
 
 class DataSourceConfig(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
@@ -161,7 +168,10 @@ DATABASE_URL = "sqlite:///./bt_gui.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine)
 
-class Base(DeclarativeBase): pass
+
+class Base(DeclarativeBase):
+    pass
+
 
 class Strategy(Base):
     __tablename__ = "strategies"
@@ -170,6 +180,7 @@ class Strategy(Base):
     tree_json = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 
 class DataSource(Base):
     __tablename__ = "data_sources"
@@ -180,6 +191,7 @@ class DataSource(Base):
     path_or_tickers = Column(String)
     meta_json = Column(JSON)
     parquet_blob = Column(LargeBinary)
+
 
 class BacktestRun(Base):
     __tablename__ = "backtest_runs"
@@ -192,13 +204,17 @@ class BacktestRun(Base):
     transactions_parquet = Column(LargeBinary)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
 def init_db():
     Base.metadata.create_all(bind=engine)
 
+
 def get_db():
     db = SessionLocal()
-    try: yield db
-    finally: db.close()
+    try:
+        yield db
+    finally:
+        db.close()
 ```
 
 Chiama `init_db()` in `backend/main.py` all'avvio (o usa lifespan).
@@ -222,6 +238,7 @@ TYPE_MAP = {
     "CouponPayingSecurity": bt.CouponPayingSecurity,
 }
 
+
 def _build_node(cfg, is_root=False):
     cls = TYPE_MAP[cfg.type]
     # Node(name, children) + algos via AlgoStack
@@ -236,16 +253,20 @@ def _build_node(cfg, is_root=False):
     # Wire algos if Strategy type
     if cfg.type in ("Strategy", "FixedIncomeStrategy") and cfg.algos:
         from backend.services.algo_registry import build_algo
+
         stack = [build_algo(a.class_name, a.params) for a in cfg.algos]
         # bt.Strategy expects AlgoStack; use bt.AlgoStack or assign directly
         import bt.core as btc
+
         node.algo_stack = btc.AlgoStack(*stack) if hasattr(btc, "AlgoStack") else stack
     # Recursively attach children for Strategy nodes (bt expects children via Node)
     # If _build_node already passed children, skip
     return node
 
+
 def to_bt_strategy(tree) -> bt.Strategy:
     return _build_node(tree.root, is_root=True)
+
 
 def from_bt_strategy(strategy) -> StrategyTree:
     # Optional reverse — not needed for v1, stub that raises NotImplemented
@@ -269,6 +290,7 @@ import inspect, importlib
 import bt.algos as algos_mod
 from bt.core import Algo
 
+
 def discover_algos():
     out = {}
     for name in dir(algos_mod):
@@ -276,30 +298,63 @@ def discover_algos():
         if inspect.isclass(obj) and issubclass(obj, Algo) and obj is not Algo:
             # categorise by prefix (Run*, Select*, Weigh*, etc.) — same 7 buckets as SPEC
             cat = "Other"
-            for prefix, label in [("Run","Scheduling"),("Select","Selection"),("Weigh","Weighting"),("Limit","Risk"),("Target","Risk"),("PTE","Risk"),("Rebalance","Execution"),("Capital","Flows"),("Corporate","Flows"),("Hedge","Flows"),("Update","Flows"),("Set","Flows"),("Replay","Simulation"),("Simulate","Simulation"),("Print","Debug"),("Debug","Debug")]:
-                if name.startswith(prefix): cat = label; break
+            for prefix, label in [
+                ("Run", "Scheduling"),
+                ("Select", "Selection"),
+                ("Weigh", "Weighting"),
+                ("Limit", "Risk"),
+                ("Target", "Risk"),
+                ("PTE", "Risk"),
+                ("Rebalance", "Execution"),
+                ("Capital", "Flows"),
+                ("Corporate", "Flows"),
+                ("Hedge", "Flows"),
+                ("Update", "Flows"),
+                ("Set", "Flows"),
+                ("Replay", "Simulation"),
+                ("Simulate", "Simulation"),
+                ("Print", "Debug"),
+                ("Debug", "Debug"),
+            ]:
+                if name.startswith(prefix):
+                    cat = label
+                    break
             sig = inspect.signature(obj.__init__)
-            params = {k: {"annotation": str(v.annotation) if v.annotation!=inspect._empty else "Any", "default": v.default if v.default!=inspect._empty else None, "required": v.default==inspect._empty} for k,v in sig.parameters.items() if k!="self"}
+            params = {
+                k: {
+                    "annotation": str(v.annotation) if v.annotation != inspect._empty else "Any",
+                    "default": v.default if v.default != inspect._empty else None,
+                    "required": v.default == inspect._empty,
+                }
+                for k, v in sig.parameters.items()
+                if k != "self"
+            }
             doc = (obj.__doc__ or "").strip()
             out[name] = {"category": cat, "params": params, "doc": doc[:500]}
     return out
 
+
 REGISTRY = discover_algos()
+
 
 def build_algo(class_name: str, params: dict):
     cls = getattr(algos_mod, class_name, None)
-    if cls is None: raise ValueError(f"Unknown algo {class_name}")
+    if cls is None:
+        raise ValueError(f"Unknown algo {class_name}")
     return cls(**(params or {}))
+
 
 def algo_json_schema(class_name: str):
     # JSON Schema minimal for FE auto-form: {type:"object", properties:{...}, required:[...]}
     info = REGISTRY.get(class_name)
-    if not info: raise KeyError(class_name)
+    if not info:
+        raise KeyError(class_name)
     props = {}
     req = []
     for k, v in info["params"].items():
         props[k] = {"type": "string", "default": v["default"]}  # FE coerces; keep simple for v1
-        if v["required"]: req.append(k)
+        if v["required"]:
+            req.append(k)
     return {"title": class_name, "type": "object", "properties": props, "required": req}
 ```
 
@@ -322,17 +377,22 @@ from backend.models.strategy_tree import StrategyTree
 from backend.database import get_db, Strategy as DBStrategy
 from backend.services.tree_serializer import to_bt_strategy
 
+
 @router.post("/strategies", status_code=201)
 def create_strategy(tree: StrategyTree, db=Depends(get_db)): ...
+
 
 @router.get("/strategies")
 def list_strategies(db=Depends(get_db)): ...
 
+
 @router.get("/strategies/{sid}")
 def get_strategy(sid: int, db=Depends(get_db)): ...
 
+
 @router.put("/strategies/{sid}")
 def update_strategy(sid: int, tree: StrategyTree, db=Depends(get_db)): ...
+
 
 @router.delete("/strategies/{sid}", status_code=204)
 def delete_strategy(sid: int, db=Depends(get_db)): ...

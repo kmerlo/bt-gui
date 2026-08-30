@@ -1,82 +1,97 @@
 import { useEffect, useState } from 'react'
-import { backtestApi, dataApi, type DataSourceRow } from '../../api/bt'
+import { backtestApi, priceDataApi } from '../../api/bt'
 import { useBtStore } from '../store/btStore'
+import type { NodeConfig } from '../../types/bt'
 
 const S = {
   wrap: { border: '1px solid #30363d', borderRadius: 8, padding: 12, background: '#0d1117', color: '#c9d1d9' } as const,
   input: { background: '#010409', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, padding: '6px 8px', width: '100%' } as const,
+  select: { background: '#010409', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, padding: '6px 8px', width: '100%' } as const,
   btn: { background: '#238636', color: '#fff', border: '1px solid #30363d', borderRadius: 6, padding: '8px 14px', cursor: 'pointer' } as const,
   btnDis: { background: '#21262d', color: '#8b949e', border: '1px solid #30363d', borderRadius: 6, padding: '8px 14px' } as const,
   label: { fontSize: 12, color: '#8b949e', marginBottom: 4, display: 'block' } as const,
 }
 
+function collectTickers(node: NodeConfig): string[] {
+  const tickers: string[] = []
+  const walk = (n: NodeConfig) => {
+    if (n.type === 'Security' || n.type === 'HedgeSecurity' || n.type === 'CouponPayingSecurity') {
+      const t = n.name.trim().toUpperCase()
+      if (t && t !== 'NEW_TICKER') tickers.push(t)
+    }
+    for (const c of n.children) walk(c)
+  }
+  walk(node)
+  return tickers
+}
+
 export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number) => void }) {
   const tree = useBtStore((s) => s.tree)
-  const priceSourceId = useBtStore((s) => s.priceSourceId)
-  const setPriceSourceId = useBtStore((s) => s.setPriceSourceId)
+  const tickerStart = useBtStore((s) => s.tickerStart)
+  const tickerEnd = useBtStore((s) => s.tickerEnd)
+  const priceColumn = useBtStore((s) => s.priceColumn)
+  const setTickerStart = useBtStore((s) => s.setTickerStart)
+  const setTickerEnd = useBtStore((s) => s.setTickerEnd)
+  const setPriceColumn = useBtStore((s) => s.setPriceColumn)
   const backtestConfig = useBtStore((s) => s.backtestConfig)
   const setBacktestConfig = useBtStore((s) => s.setBacktestConfig)
   const extraSourceIds = useBtStore((s) => s.extraSourceIds)
   const indicatorSourceIds = useBtStore((s) => s.indicatorSourceIds)
   const setIndicatorSourceIds = useBtStore((s) => s.setIndicatorSourceIds)
-  const [sources, setSources] = useState<DataSourceRow[]>([])
-  const [indicators, setIndicators] = useState<DataSourceRow[]>([])
+  const [availableTickers, setAvailableTickers] = useState<string[]>([])
+  const [selectedTickers, setSelectedTickers] = useState<string[]>([])
   const [msg, setMsg] = useState('')
   const [progress, setProgress] = useState(0)
   const [running, setRunning] = useState(false)
-  // derived string for select
-  const priceId = priceSourceId != null ? String(priceSourceId) : ''
   const capital = backtestConfig.initial_capital
   const integerPos = backtestConfig.integer_positions
   const simpleFn = backtestConfig.simple_fn
 
   useEffect(() => {
-    dataApi
-      .list()
-      .then((rows) => {
-        setSources(rows)
-        setIndicators(rows.filter((r) => r.type === 'indicator'))
-      })
-      .catch(() => {
-        /* ignore */
-      })
+    priceDataApi.list().then((rows) => setAvailableTickers(rows.map((r) => r.symbol))).catch(() => { /* ignore */ })
   }, [])
+
+  useEffect(() => {
+    if (!tree) return
+    const treeTickers = collectTickers(tree.root)
+    setSelectedTickers((prev) => {
+      const prevSet = new Set(prev)
+      const next = [...prevSet]
+      for (const t of treeTickers) {
+        if (!prevSet.has(t)) next.push(t)
+      }
+      return next
+    })
+  }, [tree?.root?.id])
 
   const validateFn = (v: string) => {
     if (!v.trim()) return ''
-    try {
-      const fn = eval(v) as unknown // eslint-disable-line no-eval
-      if (typeof fn !== 'function') return 'must be callable'
-      if (fn.length < 2) return 'must accept (q,p)'
-      return ''
-    } catch (e) {
-      return String(e)
-    }
+    const ok = /^\s*lambda\s+\w+\s*,\s*\w+\s*:/.test(v)
+    if (!ok) return 'must be lambda (q,p)'
+    // validazione completa al salvataggio (BE)
+    return ''
   }
   const fnError = validateFn(simpleFn)
 
+  const toggleTicker = (sym: string) => {
+    setSelectedTickers((prev) => prev.includes(sym) ? prev.filter((t) => t !== sym) : [...prev, sym])
+  }
+
   const handleRun = async () => {
-    if (!tree) {
-      setMsg('no tree')
-      return
-    }
-    if (!priceId) {
-      setMsg('select price source')
-      return
-    }
-    if (fnError) {
-      setMsg(fnError)
-      return
-    }
+    if (!tree) { setMsg('no tree'); return }
+    if (selectedTickers.length === 0) { setMsg('select at least one ticker'); return }
+    if (fnError) { setMsg(fnError); return }
     setRunning(true)
     setProgress(0.05)
     setMsg('')
-    const config: Record<string, unknown> = {
+    const config = {
       initial_capital: capital,
       integer_positions: integerPos,
       commission: { type: 'simple', simple_fn: simpleFn || null },
+      start: tickerStart,
+      end: tickerEnd,
+      price_column: priceColumn,
     }
-    // ponytail: union of stored preset indicators + those actually referenced in tree algos
     const referencedIds = (() => {
       const ids = new Set<number>(indicatorSourceIds)
       const walk = (node: unknown) => {
@@ -92,48 +107,39 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
         if (n.root) walk(n.root)
       }
       walk(tree as unknown)
-      return [...ids].filter((id) => indicators.some((ind) => ind.id === id))
+      return [...ids]
     })()
-    // persist referenced union for next reload completeness
     if (referencedIds.length !== indicatorSourceIds.length || referencedIds.some((id, i) => id !== indicatorSourceIds[i])) {
       setIndicatorSourceIds(referencedIds)
     }
     try {
-      const res = await backtestApi.create({ tree, config, price_source_id: Number(priceId), extra_source_ids: extraSourceIds, indicator_source_ids: referencedIds })
+      const res = await backtestApi.create({
+        tree,
+        config,
+        tickers: selectedTickers,
+        extra_source_ids: extraSourceIds,
+        indicator_source_ids: referencedIds,
+      })
       const id = res.id
       onRunCreated?.(id)
       setMsg(`run #${id} started`)
-      // WS progress
       const ws = backtestApi.wsProgress(id)
       ws.onmessage = (ev: MessageEvent) => {
         try {
           const d = JSON.parse(ev.data as string) as { progress: number; done: boolean; error?: string }
           setProgress(d.progress)
           if (d.error) setMsg(`error: ${d.error}`)
-          if (d.done) {
-            ws.close()
-            setRunning(false)
-            setProgress(1)
-          }
-        } catch {
-          /* ignore */
-        }
+          if (d.done) { ws.close(); setRunning(false); setProgress(1) }
+        } catch { /* ignore */ }
       }
       ws.onerror = () => {
-        // fallback poll
         let tries = 0
         const poll = async () => {
           tries++
           try {
             const r = await backtestApi.getRun(id)
-            if (r.stats) {
-              setProgress(1)
-              setRunning(false)
-              return
-            }
-          } catch {
-            /* ignore */
-          }
+            if (r.stats) { setProgress(1); setRunning(false); return }
+          } catch { /* ignore */ }
           if (tries < 30) setTimeout(poll, 500)
           else setRunning(false)
         }
@@ -145,19 +151,39 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
     }
   }
 
-  const priceSources = sources.filter((s) => s.type === 'price')
-
   return (
     <div style={S.wrap}>
       <div style={{ fontWeight: 700, marginBottom: 8 }}>Run Backtest</div>
-      <label style={S.label}>Price source</label>
-      <select style={S.input} value={priceId} onChange={(e) => setPriceSourceId(e.target.value ? Number(e.target.value) : null)}>
-        <option value="">— select —</option>
-        {priceSources.map((s) => (
-          <option key={s.id} value={String(s.id)}>
-            #{s.id} {s.name}
-          </option>
+      <label style={S.label}>Tickers</label>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
+        {availableTickers.length === 0 && <span style={{ fontSize: 12, color: '#8b949e' }}>Nessun ticker — vai su Ticker Catalog per fetchare dati</span>}
+        {availableTickers.map((sym) => (
+          <button
+            key={sym}
+            type="button"
+            onClick={() => toggleTicker(sym)}
+            style={{
+              background: selectedTickers.includes(sym) ? '#238636' : '#21262d',
+              color: selectedTickers.includes(sym) ? '#fff' : '#c9d1d9',
+              border: '1px solid #30363d',
+              borderRadius: 4,
+              padding: '2px 8px',
+              cursor: 'pointer',
+              fontSize: 12,
+            }}
+          >
+            {sym}
+          </button>
         ))}
+      </div>
+      <label style={{ ...S.label, marginTop: 8 }}>Start date</label>
+      <input type="date" value={tickerStart ?? ''} onChange={(e) => setTickerStart(e.target.value)} style={S.input} />
+      <label style={{ ...S.label, marginTop: 8 }}>End date</label>
+      <input type="date" value={tickerEnd ?? ''} onChange={(e) => setTickerEnd(e.target.value)} style={S.input} />
+      <label style={{ ...S.label, marginTop: 8 }}>Price column</label>
+      <select value={priceColumn} onChange={(e) => setPriceColumn(e.target.value as 'close' | 'adj_close')} style={S.select}>
+        <option value="close">Close</option>
+        <option value="adj_close">Adj Close</option>
       </select>
       <label style={{ ...S.label, marginTop: 8 }}>Initial capital</label>
       <input style={S.input} type="number" value={capital} onChange={(e) => setBacktestConfig({ initial_capital: Number(e.target.value) })} />

@@ -32,40 +32,56 @@ def _set_progress(run_id: int, data: dict[str, Any]) -> None:
         _progress[run_id] = data
 
 
-def _load_dataframes(price_source_id: int, extra_ids: dict[str, int] | None = None) -> tuple[pd.DataFrame, dict[str, pd.DataFrame], pd.DataFrame | None, pd.DataFrame | None]:
+def _load_prices_from_db(
+    tickers: list[str],
+    start: str | None,
+    end: str | None,
+    price_column: str = "close",
+) -> pd.DataFrame:
+    """Load price data from price_data table, pivot to DataFrame for bt framework."""
+    from backend.database import PriceData as DBPriceData
+
     db = SessionLocal()
     try:
-        prow = db.query(DBSource).filter(DBSource.id == price_source_id).first()
-        if prow is None or prow.parquet_blob is None:
-            raise ValueError("price source not found")
-        price_df = pd.read_parquet(io.BytesIO(prow.parquet_blob))
-        price_df.index = pd.to_datetime(price_df.index)
-        additional: dict[str, pd.DataFrame] = {}
-        volume = None
-        volatility = None
-        if extra_ids:
-            for k, vid in extra_ids.items():
-                row = db.query(DBSource).filter(DBSource.id == vid).first()
-                if row is None or row.parquet_blob is None:
-                    continue
-                df = pd.read_parquet(io.BytesIO(row.parquet_blob))
-                df.index = pd.to_datetime(df.index)
-                if k in ("volume", "volatility"):
-                    if k == "volume":
-                        volume = df
-                    else:
-                        volatility = df
-                else:
-                    additional[k] = df
-        return price_df, additional, volume, volatility
+        q = db.query(DBPriceData).filter(
+            DBPriceData.symbol.in_([t.upper() for t in tickers]),
+        )
+        if start:
+            q = q.filter(DBPriceData.date >= pd.to_datetime(start))
+        if end:
+            q = q.filter(DBPriceData.date <= pd.to_datetime(end))
+        q = q.order_by(DBPriceData.date.asc())
+        rows = q.all()
+
+        if not rows:
+            raise ValueError(f"No price data found for tickers {tickers}")
+
+        df = pd.DataFrame(
+            [
+                {
+                    "date": r.date,
+                    r.symbol.upper(): getattr(r, price_column) if price_column != "close" else r.close,
+                }
+                for r in rows
+            ]
+        )
+        df = df.set_index("date").sort_index()
+        # ensure column names are upper
+        df.columns = [str(c).upper() for c in df.columns]
+        # resolve duplicate dates (one row per ticker per date) keeping first non-null per column
+        df = df.groupby(df.index).first()
+        # fill forward missing values (weekends/holidays)
+        df = df.ffill()
+        return df
     finally:
         db.close()
 
 
 def _build_commission(cfg: BacktestConfig):  # type: ignore[no-untyped-def]
     if cfg.commission.simple_fn:
-        fn = eval(cfg.commission.simple_fn, {"__builtins__": {}})  # noqa: S307
-        return fn
+        from backend.services.commission_parser import parse_commission_fn
+
+        return parse_commission_fn(cfg.commission.simple_fn)
     return None
 
 
@@ -306,20 +322,45 @@ def schedule_backtest(
         executor.submit(_bg)
 
 
-# fallback for callers that only have ids (production path via SessionLocal)
+# fallback for callers that only have ids (legacy path)
 def schedule_backtest_by_ids(run_id: int, tree: StrategyTree, cfg: BacktestConfig, price_source_id: int, extra_ids: dict[str, int], indicator_ids: list[int] | None = None):  # type: ignore[no-untyped-def]
-    price_df, additional, volume, volatility = _load_dataframes(price_source_id, extra_ids)
-    indicators: dict[str, pd.DataFrame] = {}
-    if indicator_ids:
-        db = SessionLocal()
-        try:
-            for ind_id in indicator_ids:
-                row = db.query(DBSource).filter(DBSource.id == ind_id).first()
+
+    db = SessionLocal()
+    try:
+        prow = db.query(DBSource).filter(DBSource.id == price_source_id).first()
+        if prow is None or prow.parquet_blob is None:
+            raise ValueError("price source not found")
+        price_df = pd.read_parquet(io.BytesIO(prow.parquet_blob))
+        price_df.index = pd.to_datetime(price_df.index)
+        additional: dict[str, pd.DataFrame] = {}
+        volume = None
+        volatility = None
+        if extra_ids:
+            extra_vals = list(extra_ids.values())
+            extra_map = {r.id: r for r in db.query(DBSource).filter(DBSource.id.in_(extra_vals)).all()} if extra_vals else {}
+            for k, vid in extra_ids.items():
+                row = extra_map.get(vid)
                 if row is None or row.parquet_blob is None:
                     continue
                 df = pd.read_parquet(io.BytesIO(row.parquet_blob))
                 df.index = pd.to_datetime(df.index)
-                indicators[str(ind_id)] = df
-        finally:
-            db.close()
+                if k in ("volume", "volatility"):
+                    if k == "volume":
+                        volume = df
+                    else:
+                        volatility = df
+                else:
+                    additional[k] = df
+        indicators: dict[str, pd.DataFrame] = {}
+        if indicator_ids:
+            ind_map = {r.id: r for r in db.query(DBSource).filter(DBSource.id.in_(indicator_ids)).all()} if indicator_ids else {}
+            for ind_id in indicator_ids:
+                ind_row = ind_map.get(ind_id)
+                if ind_row is None or ind_row.parquet_blob is None:
+                    continue
+                ind_df = pd.read_parquet(io.BytesIO(ind_row.parquet_blob))
+                ind_df.index = pd.to_datetime(ind_df.index)
+                indicators[str(ind_id)] = ind_df
+    finally:
+        db.close()
     schedule_backtest(run_id, tree, cfg, price_df, additional, volume, volatility, indicators)

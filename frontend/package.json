@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "typecheck": "tsc -b --noEmit",
     "lint": "eslint .",
     "preview": "vite preview",
     "gen:types": "openapi-typescript http://localhost:8001/openapi.json -o src/types/bt.ts"
@@ -17,7 +18,6 @@
     "@dnd-kit/core": "^6.1.0",
     "@dnd-kit/sortable": "^8.0.0",
     "@monaco-editor/react": "^4.7.0",
-    "chart.js": "^4.5.1",
     "zustand": "^5.0.0"
   },
   "devDependencies": {

@@ -82,6 +82,7 @@ Il guard in `main.py:312-318` monterà automaticamente gli endpoint `/api/bt/*`:
 ```python
 try:
     from bt_gui.api.routes import router as bt_router
+
     app.include_router(bt_router)
 except ImportError:
     pass  # bt-gui non installato — proxy vite gestisce
@@ -194,7 +195,7 @@ E rimuovi la riga proxy `/api/bt` da `vite.config.ts`.
 `bt-gui/backend/main.py:13-19` già configura:
 
 ```python
-allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:5173"],
+allow_origins = (["http://localhost:3000", "http://localhost:3001", "http://localhost:5173"],)
 ```
 
 Se vedi errori CORS, aggiungi l'origin mancante lì e riavvia BE.
@@ -256,5 +257,5 @@ Entrambi devono passare (33 + 71 test totali).
 
 1. **Avvia in A** e verifica che palette + tree + Run → results funzioni.
 2. **Passa a B** con `uv add --editable ../bt-gui` e apri `http://localhost:3000/#bt-builder`.
-3. **Documenta in `docs/`** eventuali fix specifici (seguire prefissi `FIX-`, `GUIDE-` come Stocks_App).
-4. **Automatizza re-copia FE** se `bt-gui` evolve — script `scripts/sync-from-bt-gui.sh` può essere aggiunto in futuro.
+3. **Documenta in `my-docs/`** eventuali fix specifici (seguire prefissi `FIX-`, `GUIDE-` come Stocks_App).
+4. **Automatizza re-copia FE** se `bt-gui` evolve — `// ponytail: sync manuale fino a integrazione stabile` (nessun script `scripts/sync-from-bt-gui.sh` in v1).
