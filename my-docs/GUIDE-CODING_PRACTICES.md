@@ -52,18 +52,22 @@ Senza regole esplicite, è facile:
 ### 1. Un file, una responsabilità
 
 ```
-❌ TreeEditor.tsx (600+ righe)
-   └── drag logic, node render, inspector panel, algo stack inline...
+❌ ResultsDashboard.tsx (548 righe prima di 2026-08-30)
+   └── filtri, fetch, polling, charts, metrics, transactions in un unico file
 
-✅ hooks/useTreeDrag.ts    (~150 righe) — solo logica drag-and-drop
-✅ hooks/useTreeInspector.ts (~100 righe) — solo stato e logica dell'inspector
-✅ components/NodeCard.tsx  (~60 righe)  — rendering singolo nodo
-✅ components/AlgoStack.tsx (~120 righe) — composizione algo (già separato)
+✅ hooks/useRunsTable.ts     (~110 righe) — filtri/sort/refresh/polling
+✅ hooks/useEquityCharts.ts   (~107 righe) — sanitize/drawdown + sync crosshair/pan
+✅ components/RunsTable.tsx   (~121 righe) — tabella sticky + filtri
+✅ components/MetricsPanel.tsx (~69 righe) — grouping Daily/Monthly/Yearly
+✅ Orchestratore ResultsDashboard.tsx (~69 righe) — solo composizione
+
+> Esempio vivo: vedi appunti_sviluppi.md:32 e advisor-plans/004-split-results-dashboard.md
 ```
 
 **Soglia pratica**: se un file supera le **300 righe**, chiediti: "Quali di queste responsabilità
 posso estrarre?"
 **Soglia dura**: **mai superare le 500 righe**. Se ci arrivi, estrai ORA.
+> **Eccezione**: `frontend/src/types/bt.ts` (439 righe, AUTO-GENERATO da openapi-typescript) è escluso — non splittarlo.
 
 ### 2. Estrai presto, non dopo
 
@@ -225,6 +229,38 @@ const { tree } = useBtStore()
 Se un hook ha bisogno di dati, **passaglieli come parametri** o leggili dallo store Zustand.
 Non usare `useRef` come variabile globale nascosta.
 
+### 11. Dati & DB — MAI cancellare contenuti utente (REGOLA INVIOLABILE)
+
+> ⚠️ **VIETATO ASSOLUTO — pena blocco PR:** cancellare o modificare righe utente in `bt_gui.db` (`strategies`, `data_sources`, `backtest_runs`, `tutorial1` / indicatori `sma50` etc.). Ogni violazione è un bug critico, anche se fatta da `pytest` o da un test.
+
+**Divieti espliciti (MAI fare, nemmeno nei test):**
+
+- `rm *.db`, `DROP TABLE`, `DELETE FROM <tabella>` senza `WHERE` su dati utente.
+- `DELETE FROM data_sources WHERE type='indicator'` o qualsiasi `WHERE type=...` che colpisce righe utente (es. `sma50`).
+- `db.query(DBSource).filter(DBSource.type == "indicator").delete()` — CANCELLATO: cancella anche indicatori utente. **MAI.**
+- `SessionLocal().query(...).delete()` senza filtro `name LIKE 'test_%' / 'tmp_%' / 'mock_%'`.
+- Sovrascrivere `bt_gui.db` con un DB di test o fare `Base.metadata.drop_all()` sul file reale.
+
+**Cosa fare invece (obbligatorio):**
+
+- Per test/verifiche crea **solo** righe con prefisso `test_` / `tmp_` / `mock_` / `ind_sma_` / `smatest_` etc. (es. `test_csv_abc123`, `tmp_preset_test_123`).
+- Cancella **solo ed esclusivamente** quelle righe, con filtro esplicito sul nome:
+  ```python
+  # ✅ ESEMPIO CORRETTO
+  db.query(DBSource).filter(DBSource.name.like("test\\_%") | DBSource.name.like("tmp\\_%") | DBSource.name.like("mock\\_%")).delete(synchronize_session=False)
+  # ❌ VIETATO
+  db.query(DBSource).filter(DBSource.type == "indicator").delete()
+  ```
+- `pytest` su `bt_gui.db` reale: usa `Base.metadata.create_all` + `SessionLocal` isolata, MAI `drop_all`; lascia il DB pulito **solo** dagli artefatti `test_%`/`tmp_%`/`mock_%` a fine run. Preferisci `sqlite:///:memory:` con `StaticPool` (vedi `tests/backend/test_persistence.py:11`) per test isolati.
+- Prima di qualsiasi operazione distruttiva (anche in un test) chiedi conferma esplicita all'utente e mostra il `WHERE` che userai.
+- Se un test deve verificare "lista vuota", NON svuotare la tabella utente: crea un DB in-memory isolato o filtra per `name LIKE 'test_%'` e asserisci su quello, mai su `SELECT * FROM data_sources` globale.
+
+**Se hai già cancellato per errore:** fermati, avvisa l'utente, verifica con `SELECT id, name, type FROM data_sources` cosa è stato perso e proponi ripristino. Non nascondere l'errore.
+
+> Questa è la regola più critica del repo — violazione = bug critico. Vedi AGENTS.md:131 per il dettaglio normativo.
+
+---
+
 ### 10. Route sempre sotto `/api/bt`
 
 Tutte le route devono andare dentro `router = APIRouter(prefix="/api/bt")` in
@@ -262,14 +298,18 @@ backend/
 │   └── data_source.py
 ├── services/
 │   ├── __init__.py
-│   ├── tree_serializer.py   # StrategyTree → bt.Strategy
-│   ├── algo_registry.py     # discover_algos(), algo_json_schema()
-│   ├── data_loader.py       # CSV/Parquet/ffn loading
-│   ├── backtest_runner.py   # async run in threadpool + WS progress
-│   └── persistence.py       # CRUD SQLite
+│   ├── tree_serializer.py       # StrategyTree → bt.Strategy
+│   ├── algo_registry.py         # discover_algos(), algo_json_schema()
+│   ├── data_loader.py           # yfinance (fetch_and_store_yf) + ffn legacy
+│   ├── backtest_runner.py       # async run in threadpool + WS progress
+│   ├── commission_parser.py     # whitelist simple_fn (plan 001)
+│   ├── indicator_calculator.py  # SMA/EMA/RSI/MACD/BB (plan 006)
+│   └── persistence.py           # CRUD SQLite
 └── api/
-    ├── __init__.py
-    └── routes.py        # APIRouter(prefix="/api/bt") — UNICO punto di integrazione
+    ├── _helpers.py, _query.py   # shared pagination/search helpers (plan 008)
+    ├── algos.py, backtest.py, data_sources.py, health.py
+    ├── indicators.py, price_data.py, runs.py, strategies.py
+    └── routes.py                # aggregator — include_router di tutti i sub-router (prefix="/api/bt")
 ```
 
 **Regola**: un service = un file. Non mettere 3 service in uno solo. Se `backtest_runner.py`
@@ -282,33 +322,35 @@ frontend/src/
 ├── main.tsx
 ├── App.tsx                  # Router + layout, mai più di 80 righe
 ├── api/
-│   └── bt.ts                # request<T>, WS_BASE, btApi namespace
+│   ├── request.ts           # request<T>, WS_BASE (plan 008)
+│   ├── price.ts, data.ts, strategies.ts, algos.ts, runs.ts, settings.ts
+│   └── bt.ts                # barrel re-export (ponytail: <60 lines)
 ├── types/
-│   └── bt.ts                # AUTO-GENERATO da openapi-typescript — NON editare a mano
+│   └── bt.ts                # AUTO-GENERATO — NON editare a mano
 ├── bt/
 │   ├── components/
-│   │   ├── TreeEditor.tsx   # orchestrazione drag+render
-│   │   ├── NodeCard.tsx     # singolo nodo (piccolo, <80 righe)
-│   │   ├── AlgoStack.tsx    # composer algo
-│   │   ├── DataManager.tsx
-│   │   ├── RunDialog.tsx
-│   │   └── ResultsDashboard.tsx
+│   │   ├── TreeEditor.tsx, BuilderView.tsx, AlgoStack.tsx, NodeInspector.tsx
+│   │   ├── DataManager.tsx, DataDetailView.tsx, DateInputIT.tsx
+│   │   ├── RunDialog.tsx, ResultsDashboard.tsx, RunsTable.tsx, MetricsPanel.tsx
+│   │   ├── TransactionsTable.tsx, StrategiesView.tsx, SettingsView.tsx, IndicatorPanel.tsx
+│   │   └── (ogni componente <300 righe, solo JSX)
 │   └── store/
-│       └── btStore.ts       # Zustand store
-└── hooks/                   # hook separati dalla logica UI
-    ├── useTreeDrag.ts
-    ├── useTreeInspector.ts
-    └── useBacktestRunner.ts
+│       ├── btStore.ts       # Zustand store
+│       ├── preset.ts        # persist tickerStart/End, priceColumn, backtestConfig
+│       └── treeOps.ts       # findNode/updateNode/addChild/remove/insertAt
+└── hooks/
+    ├── useTreeDrag.ts, useRunsTable.ts, useRunDetail.ts
+    └── useEquityCharts.ts, useStrategySave.ts
 ```
 
-**Regola**: `components/` contiene solo JSX. La logica va in `hooks/` o nello `store/`.
+**Regola**: `components/` contiene solo JSX. La logica va in `hooks/` o nello `store/`. Vedi AGENTS.md:61.
 
 ---
 
 ## Checklist per nuove feature
 
 Quando inizi una nuova feature (riferisciti sempre a `./plans/` per il piano corrispondente),
-rispondi a queste domande **prima** di scrivere codice:
+rispondi a queste 11 domande **prima** di scrivere codice:
 
 1. ☐ Il piano esiste in `./plans/`? → Se no, crealo prima.
 2. ☐ Questa logica appartiene a un dominio esistente? → Va nel suo hook/service esistente.
@@ -321,6 +363,7 @@ rispondi a queste domande **prima** di scrivere codice:
 9. ☐ I tipi necessari esistono in `types/bt.ts`? → Se no, aggiungili al model Pydantic e
    rigenera con `npm run gen:types`.
 10. ☐ Lo stato è locale (useState) o condiviso (Zustand)? → Se 2+ componenti ci accedono, Zustand.
+11. ☐ Ho toccato il DB? → Mai DELETE senza WHERE su name LIKE 'test_%' / 'tmp_%' / 'mock_%'; mai DROP/rm *.db; usa sqlite:///:memory: per liste vuote.
 
 ---
 
@@ -364,5 +407,9 @@ Copia questa sezione e consegnala al tuo LLM all'inizio di una sessione di svilu
     usa `create<BtState>()` in `src/bt/store/btStore.ts`, non useState alzati a App.tsx.
 
 11. **Piani in `./plans/`**. Prima di sviluppare, leggi il piano corrispondente.
-    Se non esiste, crealo prima di scrivere codice.
+     Se non esiste, crealo prima di scrivere codice.
+
+12. **MAI cancellare righe utente in bt_gui.db** — vedi §11. Per test usa solo prefissi test_/tmp_/mock_ e sqlite:///:memory:.
+
+13. **Ponytail di default: soluzione più corta che funziona** — marca scorciatoie con `// ponytail:` e verifica con `npm run build` / `pytest` prima di dichiarare done (AGENTS.md:99-101).
 ```

@@ -2,6 +2,7 @@
 
 > **Prima di qualsiasi task di codice: leggi `my-docs/GUIDE-CODING_PRACTICES.md` e applica tutte le regole.**
 > Questo file è una sintesi operativa; la fonte normativa è la guida. In caso di conflitto, vince la guida.
+> Sync: questo estratto è generato da GUIDE-CODING_PRACTICES.md:50-280 — mantieni allineati (ponytail + DB §11).
 
 ## 0. Lettura obbligatoria
 
@@ -39,7 +40,7 @@ Porte: BE `:8001`, FE `:3001` (proxy `/api` → `:8001`). Piani: `./plans/`.
 10. **Route sempre sotto `/api/bt`** — `backend/api/routes.py: APIRouter(prefix="/api/bt")`; mai route in `main.py`.
 11. **Piani prima del codice** — verifica `./plans/` esista; se manca, crealo prima di codificare.
 
-Checklist completa per nuove feature nella guida cap. "Checklist per nuove feature" — spunta tutti i 10 punti prima di aprire PR.
+Checklist completa per nuove feature nella guida cap. "Checklist per nuove feature" — spunta tutti i 11 punti prima di aprire PR.
 
 ## 3. Dove mettere i file
 
@@ -74,7 +75,7 @@ npm run gen:types  # rigenera src/types/bt.ts (BE su :8001)
 
 ## 5. Piani & integrazione
 
-- Piani in `./plans/`: `001-bootstrap` → `005-integration-stocks-app`. Segui l'ordine, rispetta STOP conditions e Done criteria.
+- Piani in `./plans/`: `001-bootstrap` → `005-integration-stocks-app`. Segui l'ordine, rispetta STOP conditions e Done criteria. Advisor plans (db-quality): `advisor-plans/001-harden-commission-eval` → `014-refresh-stale-example`.
 - `APIRouter(prefix="/api/bt")` è il contratto con `Stocks_App` (plan 005 lo monta senza modifiche).
 
 ## 6. Git & release
