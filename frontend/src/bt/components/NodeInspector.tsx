@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useBtStore, findNode } from '../store/btStore'
 import AlgoStack from './AlgoStack'
+import DateInputIT from './DateInputIT'
 
 const S = {
   wrap: {
@@ -184,11 +185,11 @@ export default function NodeInspector() {
               <div style={S.row}>
                 <div style={{ flex: 1 }}>
                   <span style={{ fontSize: 11, color: '#8b949e' }}>Start</span>
-                  <input type="date" value={tickerStart ?? ''} onChange={(e) => setTickerStart(e.target.value)} style={S.input} />
+                  <DateInputIT value={tickerStart ?? ''} onChange={setTickerStart} style={S.input} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <span style={{ fontSize: 11, color: '#8b949e' }}>End</span>
-                  <input type="date" value={tickerEnd ?? ''} onChange={(e) => setTickerEnd(e.target.value)} style={S.input} />
+                  <DateInputIT value={tickerEnd ?? ''} onChange={setTickerEnd} style={S.input} />
                 </div>
               </div>
               <div style={S.label}>Price column</div>

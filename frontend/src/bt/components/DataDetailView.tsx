@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { dataApi, priceDataApi, type DataSourceRow, type PriceRow } from '../../api/bt'
+import { formatDate } from '../../utils/format'
 
 const PAGE_SIZES = [25, 50, 100] as const
 const PRICE_COLS = ['date', 'open', 'high', 'low', 'close', 'adj_close', 'volume'] as const
@@ -124,7 +125,7 @@ export default function DataDetailView() {
         {priceLoading && <div style={S.header}>caricamento…</div>}
         {selectedSymbol && currentTicker && (
           <div style={S.header}>
-            {currentTicker.symbol} · {currentTicker.interval} · {currentTicker.start} → {currentTicker.end} · {priceTotal} righe
+            {currentTicker.symbol} · {currentTicker.interval} · {formatDate(currentTicker.start)} → {formatDate(currentTicker.end)} · {priceTotal} righe
             {priceSearch && ` (filtrate)`}
           </div>
         )}
@@ -146,7 +147,7 @@ export default function DataDetailView() {
               <tbody>
                 {priceRows.map((r, i) => (
                   <tr key={i}>
-                    <td style={S.td}>{r.date}</td>
+                    <td style={S.td}>{formatDate(r.date)}</td>
                     <td style={S.td}>{r.open ?? ''}</td>
                     <td style={S.td}>{r.high ?? ''}</td>
                     <td style={S.td}>{r.low ?? ''}</td>
@@ -232,7 +233,7 @@ export default function DataDetailView() {
                   <tbody>
                     {indTable.rows.map((row, i) => (
                       <tr key={i}>
-                        <td style={S.td}>{String(row['date'] ?? '')}</td>
+                        <td style={S.td}>{formatDate(String(row['date'] ?? ''))}</td>
                         {indTable.columns.map((c) => (
                           <td key={c} style={S.td}>{row[c] === null || row[c] === undefined ? '' : String(row[c])}</td>
                         ))}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { backtestApi, priceDataApi } from '../../api/bt'
 import { useBtStore } from '../store/btStore'
 import type { NodeConfig } from '../../types/bt'
+import DateInputIT from './DateInputIT'
 
 const S = {
   wrap: { border: '1px solid #30363d', borderRadius: 8, padding: 12, background: '#0d1117', color: '#c9d1d9' } as const,
@@ -177,9 +178,9 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
         ))}
       </div>
       <label style={{ ...S.label, marginTop: 8 }}>Start date</label>
-      <input type="date" value={tickerStart ?? ''} onChange={(e) => setTickerStart(e.target.value)} style={S.input} />
+      <DateInputIT value={tickerStart ?? ''} onChange={setTickerStart} style={S.input} />
       <label style={{ ...S.label, marginTop: 8 }}>End date</label>
-      <input type="date" value={tickerEnd ?? ''} onChange={(e) => setTickerEnd(e.target.value)} style={S.input} />
+      <DateInputIT value={tickerEnd ?? ''} onChange={setTickerEnd} style={S.input} />
       <label style={{ ...S.label, marginTop: 8 }}>Price column</label>
       <select value={priceColumn} onChange={(e) => setPriceColumn(e.target.value as 'close' | 'adj_close')} style={S.select}>
         <option value="close">Close</option>

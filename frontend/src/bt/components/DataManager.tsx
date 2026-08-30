@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { priceDataApi, type PriceRow, type PriceTickerRow } from '../../api/bt'
+import { formatDate } from '../../utils/format'
 import { applySearch, applySort } from '../../utils/listQuery'
+import DateInputIT from './DateInputIT'
 
 const COLUMNS: { key: keyof PriceTickerRow; label: string }[] = [
   { key: 'symbol', label: 'Symbol' },
@@ -145,8 +147,8 @@ export default function DataManager() {
           onChange={(e) => setSymbolInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') handleFetch() }}
         />
-        <input style={S.input} type="date" value={start} onChange={(e) => setStart(e.target.value)} />
-        <input style={S.input} type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
+        <DateInputIT style={S.input} value={start} onChange={setStart} />
+        <DateInputIT style={S.input} value={end} onChange={setEnd} />
         <button type="button" style={fetching.has('__batch__') ? { ...S.btn, opacity: 0.5 } : S.btnPri} onClick={handleFetch} disabled={fetching.has('__batch__')}>
           {fetching.has('__batch__') ? 'Fetching…' : 'Fetch'}
         </button>
@@ -189,8 +191,8 @@ export default function DataManager() {
                   <tr key={t.symbol}>
                     <td style={{ ...S.td, fontWeight: 600 }}>{t.symbol}</td>
                     <td style={S.td}>{t.interval}</td>
-                    <td style={S.td}>{t.start}</td>
-                    <td style={S.td}>{t.end}</td>
+                    <td style={S.td}>{formatDate(t.start)}</td>
+                    <td style={S.td}>{formatDate(t.end)}</td>
                     <td style={S.td}>{t.count}</td>
                     <td style={{ ...S.td, textAlign: 'center' as const }}>
                       <button type="button" style={isExpanded ? S.btnViewHide : S.btnView} onClick={() => toggleExpand(t.symbol)}>
@@ -219,7 +221,7 @@ export default function DataManager() {
                             <tbody>
                               {rows.map((r, i) => (
                                 <tr key={i}>
-                                  <td style={S.dataTd}>{r.date}</td>
+                                  <td style={S.dataTd}>{formatDate(r.date)}</td>
                                   <td style={S.dataTd}>{r.open ?? ''}</td>
                                   <td style={S.dataTd}>{r.high ?? ''}</td>
                                   <td style={S.dataTd}>{r.low ?? ''}</td>
