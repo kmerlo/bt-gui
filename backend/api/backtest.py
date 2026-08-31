@@ -99,6 +99,10 @@ def create_backtest(req: RunRequest, db: Session = Depends(get_db)):  # noqa: B0
     preset_ids = getattr(getattr(tree, "preset", None), "indicator_source_ids", []) or []
     all_ind_ids = list(dict.fromkeys([*req.indicator_source_ids, *preset_ids]))
     ind_rows_map = {r.id: r for r in db.query(DBSource).filter(DBSource.id.in_(all_ind_ids)).all()} if all_ind_ids else {}
+    missing_inds = [iid for iid in all_ind_ids if iid not in ind_rows_map]
+    if missing_inds:
+        names = ", ".join(f"{iid}(#{iid})" for iid in missing_inds)
+        raise HTTPException(status_code=422, detail=f"Indicatori non trovati: {names}")
     indicator_warnings: list[str] = []
     for ind_id in all_ind_ids:
         ind_row = ind_rows_map.get(ind_id)
