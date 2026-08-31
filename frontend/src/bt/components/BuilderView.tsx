@@ -6,6 +6,7 @@ import { useStrategySave } from '../../hooks/useStrategySave'
 import TreeEditor from './TreeEditor'
 import NodeInspector from './NodeInspector'
 import IndicatorPanel from './IndicatorPanel'
+import SignalPanel from './SignalPanel'
 
 const NODE_TYPES = ['Strategy', 'Security', 'FixedIncomeStrategy', 'HedgeSecurity', 'CouponPayingSecurity'] as const
 type NodeType = (typeof NODE_TYPES)[number]
@@ -36,6 +37,8 @@ export default function BuilderView() {
   const setTree = useBtStore((s) => s.setTree)
   const showIndicators = useBtStore((s) => s.showIndicators)
   const toggleIndicators = useBtStore((s) => s.toggleIndicators)
+  const showSignals = useBtStore((s) => s.showSignals)
+  const toggleSignals = useBtStore((s) => s.toggleSignals)
   const { activeType, onDragStart, onDragEnd } = useTreeDrag()
   const { nameDraft, setNameDraft, rows, loadId, setLoadId, msg, handleSave, handleSaveAsNew, handleLoad, handleNew, treeNameCommit } = useStrategySave()
 
@@ -64,6 +67,7 @@ export default function BuilderView() {
         </select>
         <button onClick={handleLoad} type="button" style={S.btn}>Load</button>
         <button onClick={toggleIndicators} type="button" style={showIndicators ? S.btnPri : S.btn}>Indicators</button>
+        <button onClick={toggleSignals} type="button" style={showSignals ? S.btnPri : S.btn}>Signals</button>
         {msg && <span style={S.msg}>{msg}</span>}
       </div>
       <DndContext collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd}>
@@ -76,6 +80,7 @@ export default function BuilderView() {
           <TreeEditor />
           <NodeInspector />
           {showIndicators && <IndicatorPanel />}
+          {showSignals && <SignalPanel />}
         </div>
         <DragOverlay>{activeType ? <div style={{ ...S.card, opacity: 0.9 }}>{activeType}</div> : null}</DragOverlay>
       </DndContext>

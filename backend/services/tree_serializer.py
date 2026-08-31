@@ -67,8 +67,10 @@ def _resolve_indicator_params(algo_cfg: Any, indicators: dict[str, pd.DataFrame]
                 ind_id = int(val)
                 df = indicators.get(str(ind_id))
                 if df is not None:
-                    condition = getattr(algo_cfg, "signal_condition", None)
-                    df = _apply_signal_condition(df, condition, price_df)
+                    # Signals are already boolean — skip condition application
+                    if not df.dtypes.apply(lambda t: t is bool).all():
+                        condition = getattr(algo_cfg, "signal_condition", None)
+                        df = _apply_signal_condition(df, condition, price_df)
                     params[k] = df
             except (ValueError, TypeError):
                 pass  # not an ID, leave as-is (could be a name string)

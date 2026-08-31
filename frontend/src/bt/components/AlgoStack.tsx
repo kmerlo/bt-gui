@@ -24,12 +24,14 @@ function AlgoItem({
   onRemove,
   onUpdate,
   indicatorSources,
+  signalSources,
 }: {
   algo: AlgoConfig
   idx: number
   onRemove: () => void
   onUpdate: (patch: Record<string, unknown>) => void
   indicatorSources: DataSourceRow[]
+  signalSources: DataSourceRow[]
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: `${algo.class_name}-${idx}` })
   const style = { transform: CSS.Transform.toString(transform), transition }
@@ -85,28 +87,39 @@ function AlgoItem({
                           #{ind.id} {ind.name} ({String((ind.meta as Record<string, unknown>)?.indicator_type ?? '?')})
                         </option>
                       ))}
+                      {signalSources.map((sig) => (
+                        <option key={sig.id} value={String(sig.id)}>
+                          #[sig-{sig.id}] {sig.name}
+                        </option>
+                      ))}
                     </select>
-                    <select
-                      value={condOp ?? ''}
-                      onChange={(e) => {
-                        const op = e.target.value
-                        const nextCond = op ? { op } : null
-                        ;(algo as Record<string, unknown>).signal_condition = nextCond
-                        onUpdate({ [k]: val })
-                        // also dispatch signal_condition update via a special key
-                        onUpdate({ __signal_condition__: nextCond ?? undefined })
-                      }}
-                      style={{ ...S.sel, flex: 0, minWidth: 140 }}
-                      title="Signal condition"
-                    >
-                      <option value="">— nessuna —</option>
-                      <option value="above">price {'>'} indicator</option>
-                      <option value="below">price {'<'} indicator</option>
-                      <option value="gt">indicator {'>'} 0</option>
-                      <option value="lt">indicator {'<'} 0</option>
-                      <option value="cross_over">crossover</option>
-                      <option value="cross_down">crossunder</option>
-                    </select>
+                    {(() => {
+                      const selectedId = val as string
+                      const isSignal = Boolean(selectedId && signalSources.some((s) => String(s.id) === selectedId))
+                      return (
+                        <select
+                          value={condOp ?? ''}
+                          onChange={(e) => {
+                            const op = e.target.value
+                            const nextCond = op ? { op } : null
+                            ;(algo as Record<string, unknown>).signal_condition = nextCond
+                            onUpdate({ [k]: val })
+                            onUpdate({ __signal_condition__: nextCond ?? undefined })
+                          }}
+                          style={{ ...S.sel, flex: 0, minWidth: 140 }}
+                          disabled={isSignal}
+                          title={isSignal ? 'pre-selezionato — già booleano' : 'Signal condition'}
+                        >
+                          <option value="">— nessuna —</option>
+                          <option value="above">price {'>'} indicator</option>
+                          <option value="below">price {'<'} indicator</option>
+                          <option value="gt">indicator {'>'} 0</option>
+                          <option value="lt">indicator {'<'} 0</option>
+                          <option value="cross_over">crossover</option>
+                          <option value="cross_down">crossunder</option>
+                        </select>
+                      )
+                    })()}
                   </div>
                 </div>
               )
@@ -169,6 +182,7 @@ export default function AlgoStack({ nodeId }: { nodeId: string }) {
   const [metas, setMetas] = useState<AlgoMeta[]>([])
   const [sel, setSel] = useState('RunMonthly')
   const [indicatorSources, setIndicatorSources] = useState<DataSourceRow[]>([])
+  const [signalSources, setSignalSources] = useState<DataSourceRow[]>([])
 
   useEffect(() => {
     algosApi
@@ -181,11 +195,18 @@ export default function AlgoStack({ nodeId }: { nodeId: string }) {
         console.error('[AlgoStack] Failed to load algos:', e)
       })
     const refresh = () => {
-      dataApi.listIndicators().then(setIndicatorSources).catch(() => { /* ignore */ })
+      Promise.all([dataApi.listIndicators(), dataApi.listSignals()]).then(([inds, sigs]) => {
+        setIndicatorSources(inds)
+        setSignalSources(sigs)
+      }).catch(() => { /* ignore */ })
     }
     dataApi
       .listIndicators()
       .then(setIndicatorSources)
+      .catch(() => { /* ignore */ })
+    dataApi
+      .listSignals()
+      .then(setSignalSources)
       .catch(() => { /* ignore */ })
     window.addEventListener('bt-indicator-refresh', refresh)
     return () => window.removeEventListener('bt-indicator-refresh', refresh)
@@ -294,7 +315,7 @@ export default function AlgoStack({ nodeId }: { nodeId: string }) {
           <SortableContext items={algos.map((a, i) => `${a.class_name}-${i}`)} strategy={verticalListSortingStrategy}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {algos.map((a, i) => (
-                <AlgoItem key={`${a.class_name}-${i}`} algo={a} idx={i} onRemove={() => removeAt(i)} onUpdate={(p) => updateAt(i, p)} indicatorSources={indicatorSources} />
+                <AlgoItem key={`${a.class_name}-${i}`} algo={a} idx={i} onRemove={() => removeAt(i)} onUpdate={(p) => updateAt(i, p)} indicatorSources={indicatorSources} signalSources={signalSources} />
               ))}
             </div>
           </SortableContext>

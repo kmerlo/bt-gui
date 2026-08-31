@@ -29,6 +29,7 @@ class BuilderPreset(BaseModel):
     price_column: Literal["close", "adj_close"] = "close"
     extra_source_ids: dict[str, int] = Field(default_factory=dict)
     indicator_source_ids: list[int] = Field(default_factory=list)
+    signal_source_ids: list[int] = Field(default_factory=list)
     config: BacktestConfig = Field(default_factory=BacktestConfig)  # type: ignore[call-arg]
     selected_node_id: str | None = None
 

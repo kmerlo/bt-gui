@@ -22,6 +22,7 @@ export type StoredPreset = {
   backtestConfig: BuilderBacktestConfig
   selectedId: string | null
   showIndicators: boolean
+  showSignals: boolean
 }
 
 function getToday(): string {
@@ -56,6 +57,7 @@ export function loadStoredPreset(): StoredPreset | null {
       },
       selectedId: (p.selectedId as string | null) ?? null,
       showIndicators: Boolean(p.showIndicators),
+      showSignals: Boolean(p.showSignals),
     }
   } catch {
     return null
@@ -87,6 +89,7 @@ export function defaultPreset(): StoredPreset {
     },
     selectedId: null,
     showIndicators: false,
+    showSignals: false,
   }
 }
 

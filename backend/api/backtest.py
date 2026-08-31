@@ -128,6 +128,14 @@ def create_backtest(req: RunRequest, db: Session = Depends(get_db)):  # noqa: B0
                        f"più corto di end strategia ({strat_end}). "
                        f"Ricalcola l'indicatore nella sezione Indicators.")
             indicator_warnings.append(msg_end)
+    # Also load saved signals (type="signal") referenced in preset
+    preset_signals = getattr(getattr(tree, "preset", None), "signal_source_ids", []) or []
+    for sid in preset_signals:
+        srow = db.query(DBSource).filter(DBSource.id == sid, DBSource.type == "signal").first()
+        if srow and srow.parquet_blob:
+            s_df = _blob_to_df(srow.parquet_blob)
+            s_df.index = pd.to_datetime(s_df.index)
+            indicators[str(sid)] = s_df
     try:
         from backend.services.backtest_runner import schedule_backtest
 

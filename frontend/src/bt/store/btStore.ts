@@ -18,6 +18,7 @@ export type BtStore = {
   runs: RunMeta[]
   selectedRunId: number | null
   showIndicators: boolean
+  showSignals: boolean
   tickerStart: string | null
   tickerEnd: string | null
   priceColumn: 'close' | 'adj_close'
@@ -29,6 +30,7 @@ export type BtStore = {
   setRuns: (r: RunMeta[]) => void
   setSelectedRun: (id: number | null) => void
   toggleIndicators: () => void
+  toggleSignals: () => void
   setTickerStart: (v: string) => void
   setTickerEnd: (v: string) => void
   setPriceColumn: (v: 'close' | 'adj_close') => void
@@ -56,6 +58,7 @@ function persist(get: () => BtStore): void {
     backtestConfig: s.backtestConfig,
     selectedId: s.selectedId,
     showIndicators: s.showIndicators,
+    showSignals: s.showSignals,
   })
 }
 
@@ -65,6 +68,7 @@ export const useBtStore = create<BtStore>((set, get) => ({
   runs: [],
   selectedRunId: null,
   showIndicators: _init.showIndicators,
+  showSignals: _init.showSignals ?? false,
   tickerStart: _init.tickerStart,
   tickerEnd: _init.tickerEnd,
   priceColumn: _init.priceColumn,
@@ -122,6 +126,11 @@ export const useBtStore = create<BtStore>((set, get) => ({
   toggleIndicators: () => {
     const next = !get().showIndicators
     set({ showIndicators: next })
+    persist(get)
+  },
+  toggleSignals: () => {
+    const next = !get().showSignals
+    set({ showSignals: next })
     persist(get)
   },
   setTickerStart: (tickerStart) => {

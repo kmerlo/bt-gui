@@ -59,6 +59,7 @@ export const dataApi = {
     return request<{ columns: string[]; rows: Record<string, unknown>[]; total: number; shape: number[]; filtered_shape: number[]; offset: number; limit: number }>(`/api/bt/data-sources/${id}/table${qs}`)
   },
   delete: (id: number) => request<void>(`/api/bt/data-sources/${id}`, { method: 'DELETE' }),
+  deleteIndicator: (id: number) => request<void>(`/api/bt/indicators/${id}`, { method: 'DELETE' }),
   bulkDelete: (ids: number[]) =>
     request<{ deleted: number; not_found: number[] }>('/api/bt/data-sources/bulk-delete', {
       method: 'POST',
@@ -70,12 +71,20 @@ export const dataApi = {
       body: JSON.stringify({ dates }),
     }),
   listIndicators: () => request<DataSourceRow[]>('/api/bt/indicators'),
-  computeIndicator: (req: { symbol: string; start?: string; end?: string; type: string; params: Record<string, unknown>; save?: boolean; name?: string }) =>
+  computeIndicator: (req: { symbol?: string; symbols?: string[]; start?: string; end?: string; type: string; params: Record<string, unknown>; save?: boolean; name?: string }) =>
     request<{ id: number; name: string; meta: IndicatorMeta; warnings?: string[] }>('/api/bt/indicators/compute', {
       method: 'POST',
       body: JSON.stringify(req),
     }),
   getIndicatorDefs: () => request<IndicatorDef[]>('/api/bt/indicators/defs'),
+  // Signals
+  listSignals: () => request<DataSourceRow[]>('/api/bt/signals'),
+  computeSignal: (req: { name: string; expression: Record<string, unknown>; symbols: string[]; start?: string; end?: string; indicator_ids?: number[]; save?: boolean }) =>
+    request<{ id: number; name: string; meta: Record<string, unknown>; shape?: number[] }>('/api/bt/signals/compute', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
+  deleteSignal: (id: number) => request<void>(`/api/bt/signals/${id}`, { method: 'DELETE' }),
   // unified adapter-aware endpoints (B2)
   fetch: (adapter: 'ffn' | 'yfinance', params: { tickers?: string[]; symbol?: string; name?: string; type?: string; start?: string; end?: string }) =>
     request<UnifiedDataFetch>('/api/bt/data/fetch', {
