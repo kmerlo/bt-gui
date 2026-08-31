@@ -54,6 +54,7 @@ export default function SettingsView() {
     try {
       await priceSourceApi.set(source)
       setPriceSource(source)
+      saveSettings({ ...settings, price_source: source })
       setPriceSourceMsg(source === 'market' ? 'sorgente: market.db (lettura sola)' : 'sorgente: locale (bt_gui.db)')
       setTimeout(() => setPriceSourceMsg(''), 3000)
     } catch (e) {

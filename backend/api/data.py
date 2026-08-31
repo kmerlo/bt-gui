@@ -69,26 +69,34 @@ class DataListResponse(BaseModel):
 
 @router.get("/list")
 def list_data(db: Session = Depends(get_db)):  # noqa: B008
-    from backend.database import PriceData as DBPriceData
+    from backend.database import DataSource as DBSource, get_price_source
+    from backend.services.price_source import list_price_tickers as _list_market_tickers
 
     sources = db.query(DBSource).order_by(DBSource.id).all()
-    prices = db.query(DBPriceData).order_by(DBPriceData.symbol, DBPriceData.date).all()
 
-    by_symbol: dict[str, dict[str, Any]] = {}
-    for r in prices:
-        sym = r.symbol.upper()
-        if sym not in by_symbol:
-            by_symbol[sym] = {"symbol": sym, "interval": r.interval, "start": str(r.date)[:10], "end": str(r.date)[:10], "count": 0}
-        entry = by_symbol[sym]
-        entry["count"] += 1
-        date_str = str(r.date)[:10]
-        if date_str < entry["start"]:
-            entry["start"] = date_str
-        if date_str > entry["end"]:
-            entry["end"] = date_str
+    source = get_price_source()
+    if source == "market":
+        prices = _list_market_tickers()
+    else:
+        from backend.database import PriceData as DBPriceData
+
+        prices_raw = db.query(DBPriceData).order_by(DBPriceData.symbol, DBPriceData.date).all()
+        by_symbol: dict[str, dict[str, Any]] = {}
+        for r in prices_raw:
+            sym = r.symbol.upper()
+            if sym not in by_symbol:
+                by_symbol[sym] = {"symbol": sym, "interval": r.interval, "start": str(r.date)[:10], "end": str(r.date)[:10], "count": 0}
+            entry = by_symbol[sym]
+            entry["count"] += 1
+            date_str = str(r.date)[:10]
+            if date_str < entry["start"]:
+                entry["start"] = date_str
+            if date_str > entry["end"]:
+                entry["end"] = date_str
+        prices = list(by_symbol.values())
 
     return {
         "adapter": "yfinance",
         "sources": [{"id": r.id, "name": r.name, "type": r.type, "source": r.source, "path_or_tickers": r.path_or_tickers} for r in sources],
-        "prices": list(by_symbol.values()),
+        "prices": prices,
     }

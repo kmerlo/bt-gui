@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { dataApi, type PriceTickerRow } from '../../api/bt'
+import { dataApi, priceDataApi, type PriceTickerRow } from '../../api/bt'
 import { loadSettings } from '../../api/settings'
 import { formatDate } from '../../utils/format'
 import { applySearch, applySort } from '../../utils/listQuery'
@@ -53,9 +53,7 @@ export default function DataManager() {
   const [adapter, setAdapter] = useState<'ffn' | 'yfinance'>(loadSettings().data_adapter)
 
   const refresh = useCallback(() => {
-    dataApi.listUnified().then((d) => {
-      setTickers(d.prices)
-    }).catch((e: unknown) => setMsg(String(e)))
+    priceDataApi.list({ limit: 1000 }).then(setTickers).catch((e: unknown) => setMsg(String(e)))
   }, [])
 
   useEffect(() => { setAdapter(loadSettings().data_adapter) }, [])
