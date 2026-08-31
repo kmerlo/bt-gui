@@ -243,10 +243,10 @@ export default function SettingsView() {
         <div style={S.row}>
           <span style={S.label}>Adapter</span>
           <select style={S.input} value={settings.data_adapter} onChange={(e) => setSettings({ ...settings, data_adapter: e.target.value as BtSettings['data_adapter'] })}>
-            <option value="ffn">ffn (attuale)</option>
-            <option value="yfinance">yfinance (futuro)</option>
+            <option value="ffn">ffn</option>
+            <option value="yfinance">yfinance</option>
           </select>
-          <span style={{ fontSize: 11, color: '#8b949e' }}>ffn attivo in v1; yfinance previsto in integrazione Stocks_App</span>
+          <span style={{ fontSize: 11, color: '#8b949e' }}>ffn → data_sources (parquet_blob); yfinance → price_data (tabellare)</span>
         </div>
         <div style={S.row}>
           <button type="button" style={S.btnPri} onClick={handleSave}>Salva</button>

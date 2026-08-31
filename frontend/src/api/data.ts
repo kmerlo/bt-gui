@@ -1,6 +1,17 @@
 import { API_BASE, request } from './request'
+import type { PriceTickerRow } from './price'
 
 export type DataSourceRow = { id: number; name: string; type: string; source: string; meta: Record<string, unknown>; path_or_tickers: string }
+
+export type UnifiedDataList = {
+  adapter: 'yfinance'
+  sources: DataSourceRow[]
+  prices: PriceTickerRow[]
+}
+
+export type UnifiedDataFetch =
+  | { adapter: 'ffn'; id: number; name: string; rows: number }
+  | { adapter: 'yfinance'; symbol: string; rows: number }
 
 export type IndicatorDef = {
   type: string
@@ -65,4 +76,11 @@ export const dataApi = {
       body: JSON.stringify(req),
     }),
   getIndicatorDefs: () => request<IndicatorDef[]>('/api/bt/indicators/defs'),
+  // unified adapter-aware endpoints (B2)
+  fetch: (adapter: 'ffn' | 'yfinance', params: { tickers?: string[]; symbol?: string; name?: string; type?: string; start?: string; end?: string }) =>
+    request<UnifiedDataFetch>('/api/bt/data/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ adapter, ...params }),
+    }),
+  listUnified: () => request<UnifiedDataList>('/api/bt/data/list'),
 }

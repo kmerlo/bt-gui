@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { priceDataApi, type PriceRow, type PriceTickerRow } from '../../api/bt'
+import { dataApi, type PriceTickerRow } from '../../api/bt'
+import { loadSettings } from '../../api/settings'
 import { formatDate } from '../../utils/format'
 import { applySearch, applySort } from '../../utils/listQuery'
 import DateInputIT from './DateInputIT'
@@ -46,14 +47,18 @@ export default function DataManager() {
   const [sort, setSort] = useState<SortState>({ by: null, dir: 'asc' })
   const [filters, setFilters] = useState<FilterState>({})
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const [rowCache, setRowCache] = useState<Record<string, PriceRow[]>>({})
+  const [rowCache, setRowCache] = useState<Record<string, { date: string; open: number | null; high: number | null; low: number | null; close: number | null; adj_close: number | null; volume: number | null }[]>>({})
   const [fetching, setFetching] = useState<Set<string>>(new Set())
   const [msg, setMsg] = useState('')
+  const [adapter, setAdapter] = useState<'ffn' | 'yfinance'>(loadSettings().data_adapter)
 
   const refresh = useCallback(() => {
-    priceDataApi.list().then(setTickers).catch((e: unknown) => setMsg(String(e)))
+    dataApi.listUnified().then((d) => {
+      setTickers(d.prices)
+    }).catch((e: unknown) => setMsg(String(e)))
   }, [])
 
+  useEffect(() => { setAdapter(loadSettings().data_adapter) }, [])
   useEffect(() => { refresh() }, [refresh])
 
   const handleFetch = async () => {
@@ -67,8 +72,9 @@ export default function DataManager() {
     const results: string[] = []
     for (const sym of symbols) {
       try {
-        const r = await priceDataApi.fetch(sym, start || undefined, end || undefined)
-        results.push(`[ok] ${r.symbol} — ${r.rows} rows`)
+        const r = await dataApi.fetch(adapter, { symbol: sym, start: start || undefined, end: end || undefined })
+        if (r.adapter === 'yfinance') results.push(`[ok] ${r.symbol} — ${r.rows} rows`)
+        else results.push(`[ok] ${r.name} — ${r.rows} rows`)
       } catch (e) {
         results.push(`[err] ${sym}: ${String(e)}`)
       }
@@ -81,8 +87,9 @@ export default function DataManager() {
 
   const handleDelete = async (symbol: string) => {
     if (!window.confirm(`Eliminare dati per "${symbol}"?`)) return
+    // ponytail: delete via price_data endpoint (adapter=yfinance path)
     try {
-      await priceDataApi.delete(symbol)
+      await fetch(`/api/bt/price-data/${encodeURIComponent(symbol)}`, { method: 'DELETE' })
       setMsg(`[ok] deleted ${symbol}`)
       setRowCache((c) => { const n = { ...c }; delete n[symbol]; return n })
       setExpanded((s) => { const n = new Set(s); n.delete(symbol); return n })
@@ -92,6 +99,11 @@ export default function DataManager() {
     }
   }
 
+  const fetchRows = useCallback(async (symbol: string) => {
+    const res = await fetch(`/api/bt/price-data/${encodeURIComponent(symbol)}${new URLSearchParams({ limit: '500' }).toString()}`)
+    return res.json() as Promise<Array<{ date: string; open: number | null; high: number | null; low: number | null; close: number | null; adj_close: number | null; volume: number | null }>>
+  }, [])
+
   const toggleExpand = async (symbol: string) => {
     if (expanded.has(symbol)) {
       setExpanded((s) => { const n = new Set(s); n.delete(symbol); return n })
@@ -99,8 +111,7 @@ export default function DataManager() {
     }
     setFetching((s) => new Set(s).add(symbol))
     try {
-      const t = tickers.find((r) => r.symbol === symbol)
-      const rows = await priceDataApi.getRows(symbol, t ? { start: t.start, end: t.end } : undefined)
+      const rows = await fetchRows(symbol)
       setRowCache((c) => ({ ...c, [symbol]: rows }))
       setExpanded((s) => new Set(s).add(symbol))
     } catch (e) {
@@ -147,8 +158,8 @@ export default function DataManager() {
           onChange={(e) => setSymbolInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') handleFetch() }}
         />
-        <DateInputIT style={S.input} value={start} onChange={setStart} />
-        <DateInputIT style={S.input} value={end} onChange={setEnd} />
+        <DateInputIT style={S.input} value={start} onChange={setStart} placeholder="start_date" tooltip={formatDate(start) || 'gg/mm/aaaa'} />
+        <DateInputIT style={S.input} value={end} onChange={setEnd} placeholder="end_date" tooltip={formatDate(end) || 'gg/mm/aaaa'} />
         <button type="button" style={fetching.has('__batch__') ? { ...S.btn, opacity: 0.5 } : S.btnPri} onClick={handleFetch} disabled={fetching.has('__batch__')}>
           {fetching.has('__batch__') ? 'Fetching…' : 'Fetch'}
         </button>

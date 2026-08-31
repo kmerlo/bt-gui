@@ -41,6 +41,18 @@ Origine: `backend/services/data_loader.py:78` `fetch_and_store_yf(db, symbol, st
 
 > Dual path legacy: `backend/api/backtest.py:67` mantiene fallback `price_source_id` (blob) se `tickers` vuoto, ma canon è `tickers` → `price_data`.
 
+### Unified Data Adapter (`/api/bt/data`) — dal 2026-08-31
+
+Endpoint unificato che instrada in base all'adapter selezionato nelle impostazioni:
+
+| Endpoint | Adapter | Destinazione salvataggio |
+|---|---|---|
+| `POST /api/bt/data/fetch` | `ffn` | `data_sources` (parquet_blob) |
+| `POST /api/bt/data/fetch` | `yfinance` | `price_data` (righe OHLCV) |
+| `GET /api/bt/data/list` | — | RESTITUISCE entrambe le tabelle |
+
+Il frontend legge `data_adapter` da `localStorage` (chiave `bt-settings:v1`) e passa l'adapter al fetch. Il componente `DataManager` usa `dataApi.fetch(adapter, params)` e `dataApi.listUnified()`.
+
 ### Formati di archiviazione
 
 - **Nessun file esterno** per dati: tutto in SQLite `bt_gui.db` (+ `bt_gui_test.db` per test).

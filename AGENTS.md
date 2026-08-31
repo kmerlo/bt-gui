@@ -100,6 +100,7 @@ git push origin master
 - Risposte brevi, fattuali; cita `file:line` per funzioni-simbolo.
 - Verifica con esecuzione (`pytest`, `npm run build`) prima di dichiarare done.
 - Ponytail attivo di default: soluzione più corta che funziona; marca scorciatoie con `// ponytail:`.
+- **Qualità sopra velocità:** quando si presenta una scelta tra due approcci (es. integrazione minimalista vs pulizia architetturale), preferire la soluzione di qualità superiore anche se richiede più tempo, salvo diversa indicazione esplicita dell'utente. Un'architettura pulita oggi costa meno di un refactoring domani.
 
 ## 8. Documentazione e appunti sviluppo
 
