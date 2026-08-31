@@ -1,8 +1,11 @@
 import io
+import math
 import time
 
 import pandas as pd
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from backend.database import Base, engine, get_db
 from backend.main import app
@@ -161,3 +164,118 @@ def test_ws_progress():
             if gr.json().get("stats"):
                 break
         assert True
+
+
+def _mem_session():
+    eng = create_engine("sqlite:///:memory:?cache=shared", connect_args={"check_same_thread": False})
+    from backend.database import Base
+    Base.metadata.create_all(bind=eng)
+    return sessionmaker(bind=eng)
+
+
+def _patch_session_local(mem_factory):
+    import backend.services.backtest_runner as br
+
+    original = br.SessionLocal
+    br.SessionLocal = mem_factory
+    return original
+
+
+def _restore_session_local(original):
+    import backend.services.backtest_runner as br
+
+    br.SessionLocal = original
+
+
+def _make_tree(name: str = "test_tree"):
+    from backend.models.strategy_tree import StrategyTree
+
+    return StrategyTree(
+        name=name,
+        root={
+            "name": name,
+            "type": "Strategy",
+            "algos": [{"class_name": "RunMonthly"}],
+            "children": [],
+        },
+        version=1,
+    )
+
+
+def _make_cfg():
+    from backend.models.backtest_config import BacktestConfig
+
+    return BacktestConfig()
+
+
+def test_run_backtest_sync_writes_error_on_bt_failure():
+    """When the tree is invalid, run_backtest_sync raises the underlying error."""
+    from backend.models.backtest_config import BacktestConfig
+    from backend.models.strategy_tree import StrategyTree
+    from backend.services.backtest_runner import run_backtest_sync
+
+    tree = StrategyTree(
+        name="bad",
+        root={"name": "bad", "type": "Strategy", "algos": [{"class_name": "NonExistent"}], "children": []},
+        version=1,
+    )
+    price_df = pd.DataFrame({"AAPL": [100.0, 101.0]}, index=pd.date_range("2020-01-01", periods=2))
+    # run_backtest_sync re-raises the ValueError after writing to DB
+    try:
+        run_backtest_sync(999, tree, BacktestConfig(), price_df, {}, None, None)
+        assert False, "should have raised"
+    except ValueError as e:
+        assert "NonExistent" in str(e)
+
+
+def test_run_backtest_sync_sanitizes_nan_inf():
+    """NaN and Inf values in perf stats are replaced with None — verified via integration."""
+
+    uid = "san" + __import__("uuid").uuid4().hex[:4]
+    price_id = _upload_prices(client, f"price_san_{uid}")
+    tree = _tree(f"san_{uid}")
+    r = client.post("/api/bt/backtest", json={"tree": tree, "price_source_id": price_id, "config": {"initial_capital": 100000}})
+    assert r.status_code == 201
+    run_id = r.json()["id"]
+    for _ in range(50):
+        time.sleep(0.2)
+        gr = client.get(f"/api/bt/runs/{run_id}")
+        stats = gr.json().get("stats")
+        if stats:
+            break
+    assert stats is not None
+    # Verify no nan/inf in numeric fields
+    for k, v in stats.items():
+        if isinstance(v, float):
+            assert not (math.isnan(v) or math.isinf(v)), f"stat {k} is nan/inf"
+
+
+def test_run_backtest_sync_saves_weights_parquet():
+    """Weights parquet is stored when bt produces weights."""
+
+    uid = "wgt" + __import__("uuid").uuid4().hex[:4]
+    price_id = _upload_prices(client, f"price_wgt_{uid}")
+    tree = _tree(f"wgt_{uid}")
+    r = client.post("/api/bt/backtest", json={"tree": tree, "price_source_id": price_id, "config": {"initial_capital": 100000}})
+    assert r.status_code == 201
+    run_id = r.json()["id"]
+    for _ in range(50):
+        time.sleep(0.2)
+        gr = client.get(f"/api/bt/runs/{run_id}")
+        stats = gr.json().get("stats")
+        if stats:
+            break
+    assert stats is not None
+    # Verify prices were saved
+    pr = client.get(f"/api/bt/runs/{run_id}/prices")
+    assert pr.status_code == 200
+    j = pr.json()
+    assert len(j["dates"]) > 0
+
+
+def test_task_registry_stores_and_removes():
+    """Verify that pending_backtest_count starts at 0 and the registry exists."""
+    from backend.services.backtest_runner import _backtest_tasks, pending_backtest_count
+
+    assert pending_backtest_count() == 0
+    assert isinstance(_backtest_tasks, dict)

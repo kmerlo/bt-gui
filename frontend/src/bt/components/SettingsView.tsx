@@ -28,12 +28,6 @@ export default function SettingsView() {
   const [dbInfo, setDbInfo] = useState<DbInfo | null>(null)
   const [dbMsg, setDbMsg] = useState('')
 
-  useEffect(() => {
-    setSettings(loadSettings())
-    handleHealth()
-    handleDbInfo()
-  }, [])
-
   const handleHealth = async () => {
     setHealthMsg('')
     try {
@@ -50,6 +44,12 @@ export default function SettingsView() {
       setDbInfo(info)
     } catch (e) { setDbMsg(String(e)) }
   }
+
+  useEffect(() => {
+    setSettings(loadSettings())
+    handleHealth()
+    handleDbInfo()
+  }, [])
   const handleSwitchDb = async (db: 'main' | 'test') => {
     if (dbInfo?.active === db) return
     if (!window.confirm(`Cambiare DB a "${db}"? Verrà ricaricata la pagina.`)) return

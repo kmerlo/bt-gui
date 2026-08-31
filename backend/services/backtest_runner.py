@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import atexit
 import io
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -11,7 +12,6 @@ import math
 import pandas as pd
 
 from backend.database import BacktestRun as DBRun
-from backend.database import DataSource as DBSource
 from backend.database import SessionLocal
 from backend.models.backtest_config import BacktestConfig
 from backend.models.strategy_tree import StrategyTree
@@ -20,6 +20,9 @@ from backend.services.tree_serializer import to_bt_strategy
 executor = ThreadPoolExecutor(max_workers=2)
 _progress: dict[int, dict[str, Any]] = {}
 _lock = threading.Lock()
+# ponytail: simple dict registry; use a proper task manager if concurrent backtests exceed 2 or graceful shutdown becomes a production requirement.
+_backtest_tasks: dict[int, asyncio.Task] = {}
+_tasks_lock = threading.Lock()
 
 
 def get_progress(run_id: int) -> dict[str, Any]:
@@ -313,7 +316,13 @@ def schedule_backtest(
     _set_progress(run_id, {"progress": 0.05, "done": False})
     try:
         loop = asyncio.get_running_loop()
-        loop.create_task(_run_background(run_id, tree, cfg, price_df, additional, volume, volatility, indicators))
+        task = loop.create_task(_run_background(run_id, tree, cfg, price_df, additional, volume, volatility, indicators))
+        with _tasks_lock:
+            _backtest_tasks[run_id] = task
+        def _clean_up(t: asyncio.Task) -> None:
+            with _tasks_lock:
+                _backtest_tasks.pop(run_id, None)
+        task.add_done_callback(_clean_up)
     except RuntimeError:
 
         def _bg():
@@ -322,45 +331,17 @@ def schedule_backtest(
         executor.submit(_bg)
 
 
-# fallback for callers that only have ids (legacy path)
-def schedule_backtest_by_ids(run_id: int, tree: StrategyTree, cfg: BacktestConfig, price_source_id: int, extra_ids: dict[str, int], indicator_ids: list[int] | None = None):  # type: ignore[no-untyped-def]
+def _shutdown_backtests() -> None:
+    with _tasks_lock:
+        for task in list(_backtest_tasks.values()):
+            if not task.done():
+                task.cancel()
+        _backtest_tasks.clear()
 
-    db = SessionLocal()
-    try:
-        prow = db.query(DBSource).filter(DBSource.id == price_source_id).first()
-        if prow is None or prow.parquet_blob is None:
-            raise ValueError("price source not found")
-        price_df = pd.read_parquet(io.BytesIO(prow.parquet_blob))
-        price_df.index = pd.to_datetime(price_df.index)
-        additional: dict[str, pd.DataFrame] = {}
-        volume = None
-        volatility = None
-        if extra_ids:
-            extra_vals = list(extra_ids.values())
-            extra_map = {r.id: r for r in db.query(DBSource).filter(DBSource.id.in_(extra_vals)).all()} if extra_vals else {}
-            for k, vid in extra_ids.items():
-                row = extra_map.get(vid)
-                if row is None or row.parquet_blob is None:
-                    continue
-                df = pd.read_parquet(io.BytesIO(row.parquet_blob))
-                df.index = pd.to_datetime(df.index)
-                if k in ("volume", "volatility"):
-                    if k == "volume":
-                        volume = df
-                    else:
-                        volatility = df
-                else:
-                    additional[k] = df
-        indicators: dict[str, pd.DataFrame] = {}
-        if indicator_ids:
-            ind_map = {r.id: r for r in db.query(DBSource).filter(DBSource.id.in_(indicator_ids)).all()} if indicator_ids else {}
-            for ind_id in indicator_ids:
-                ind_row = ind_map.get(ind_id)
-                if ind_row is None or ind_row.parquet_blob is None:
-                    continue
-                ind_df = pd.read_parquet(io.BytesIO(ind_row.parquet_blob))
-                ind_df.index = pd.to_datetime(ind_df.index)
-                indicators[str(ind_id)] = ind_df
-    finally:
-        db.close()
-    schedule_backtest(run_id, tree, cfg, price_df, additional, volume, volatility, indicators)
+
+atexit.register(_shutdown_backtests)
+
+
+def pending_backtest_count() -> int:
+    with _tasks_lock:
+        return sum(1 for t in _backtest_tasks.values() if not t.done())

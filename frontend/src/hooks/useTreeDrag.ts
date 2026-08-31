@@ -4,8 +4,7 @@ import type { NodeConfig } from '../types/bt'
 import { useBtStore } from '../bt/store/btStore'
 import { findNode, findParent } from '../bt/store/treeOps'
 
-const NODE_TYPES = ['Strategy', 'Security', 'FixedIncomeStrategy', 'HedgeSecurity', 'CouponPayingSecurity'] as const
-type NodeType = (typeof NODE_TYPES)[number]
+type NodeType = 'Strategy' | 'Security' | 'FixedIncomeStrategy' | 'HedgeSecurity' | 'CouponPayingSecurity'
 
 function uid(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2, 10)

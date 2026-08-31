@@ -23,7 +23,7 @@ export default function DateInputIT({ value, onChange, style, placeholder = 'gg/
     if (iso) { onChange(iso); setInvalid(false) }
     else {
       // partial typing (e.g. "3", "31/1") -> don't mark invalid yet
-      const partial = /^[\d/.\-]*$/.test(t) && t.length < 10
+      const partial = /^[\d/.-]*$/.test(t) && t.length < 10
       setInvalid(!partial && t.length >= 8)
     }
   }

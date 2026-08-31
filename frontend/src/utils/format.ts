@@ -19,7 +19,7 @@ export function parseDateIT(s: string): string | null {
     if (d.getUTCFullYear() !== Number(iso[1]) || d.getUTCMonth() + 1 !== Number(iso[2]) || d.getUTCDate() !== Number(iso[3])) return null
     return `${iso[1]}-${iso[2]}-${iso[3]}`
   }
-  const m = t.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/)
+  const m = t.match(/^(\d{1,2})[/.\\-](\d{1,2})[/.\\-](\d{4})$/)
   if (!m) return null
   const dd = m[1].padStart(2, '0')
   const mm = m[2].padStart(2, '0')

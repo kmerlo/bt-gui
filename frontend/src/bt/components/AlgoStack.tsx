@@ -150,7 +150,6 @@ export default function AlgoStack({ nodeId }: { nodeId: string }) {
       .list()
       .then((l) => {
         setMetas(l)
-        console.log(`[AlgoStack] Loaded ${l.length} algos`, l.slice(0, 3).map(a => a.name))
         if (l.length > 0 && !l.find((x) => x.name === sel)) setSel(l[0].name)
       })
       .catch((e) => {
