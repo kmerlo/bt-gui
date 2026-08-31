@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from backend.api._helpers import _blob_to_df
+from backend.api._helpers import _blob_to_df, _err_msg
 from backend.database import BacktestRun as DBRun
 from backend.database import DataSource as DBSource
 from backend.database import get_db
@@ -129,5 +129,5 @@ def create_backtest(req: RunRequest, db: Session = Depends(get_db)):  # noqa: B0
 
         schedule_backtest(run_id, tree, req.config, price_df, additional, volume, volatility, indicators)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail=_err_msg(e))
     return {"id": run_id, "status": "running", "warnings": indicator_warnings}

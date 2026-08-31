@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { backtestApi, priceDataApi } from '../../api/bt'
 import { useBtStore } from '../store/btStore'
 import type { NodeConfig } from '../../types/bt'
@@ -44,7 +44,10 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
   const [msg, setMsg] = useState('')
   const [progress, setProgress] = useState(0)
   const [running, setRunning] = useState(false)
+  const [runId, setRunId] = useState<number | null>(null)
   const [indicatorWarnings, setIndicatorWarnings] = useState<string[]>([])
+  const abortRef = useRef({ stopped: false, pollTimer: -1 as number })
+  const wsRef = useRef<WebSocket | null>(null)
   const capital = backtestConfig.initial_capital
   const integerPos = backtestConfig.integer_positions
   const simpleFn = backtestConfig.simple_fn
@@ -52,6 +55,46 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
   useEffect(() => {
     priceDataApi.list().then((rows) => setAvailableTickers(rows.map((r) => r.symbol))).catch(() => { /* ignore */ })
   }, [])
+
+  useEffect(() => {
+    const id = runId
+    if (id == null) return
+    const ws = backtestApi.wsProgress(id)
+    wsRef.current = ws
+    abortRef.current = { stopped: false, pollTimer: -1 }
+    const onMsg = (ev: MessageEvent) => {
+      try {
+        const d = JSON.parse(ev.data as string) as { progress: number; done: boolean; error?: string }
+        setProgress(d.progress)
+        if (d.error) setMsg(`error: ${d.error}`)
+        if (d.done) { ws.close(); setRunning(false); setProgress(1) }
+      } catch { /* ignore */ }
+    }
+    const onErr = () => {
+      let tries = 0
+      const poll = async () => {
+        if (abortRef.current.stopped) return
+        tries++
+        try {
+          const r = await backtestApi.getRun(id)
+          if (r.stats) { setProgress(1); setRunning(false); return }
+        } catch { /* ignore */ }
+        if (tries >= 30) { setRunning(false); return }
+        abortRef.current.pollTimer = window.setTimeout(poll, 500) as unknown as number
+      }
+      abortRef.current.pollTimer = window.setTimeout(poll, 1000) as unknown as number
+    }
+    ws.addEventListener('message', onMsg)
+    ws.addEventListener('error', onErr)
+    return () => {
+      abortRef.current.stopped = true
+      if (abortRef.current.pollTimer) window.clearTimeout(abortRef.current.pollTimer)
+      ws.close()
+      ws.removeEventListener('message', onMsg)
+      ws.removeEventListener('error', onErr)
+      wsRef.current = null
+    }
+  }, [runId])
 
   const treeTickers = tree ? collectTickers(tree.root) : []
 
@@ -74,6 +117,7 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
     if (fnError) { setMsg(fnError); return }
     setRunning(true)
     setProgress(0.05)
+    setRunId(null)
     setMsg('')
     const config = {
       initial_capital: capital,
@@ -111,36 +155,14 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
         extra_source_ids: extraSourceIds,
         indicator_source_ids: referencedIds,
       })
-      const id = res.id
-      onRunCreated?.(id)
+      onRunCreated?.(res.id)
       if (res.warnings?.length) {
         setIndicatorWarnings(res.warnings)
-        setMsg(`run #${id} started (⚠️ ${res.warnings.length} warning(i))`)
+        setMsg(`run #${res.id} started (⚠️ ${res.warnings.length} warning(i))`)
       } else {
-        setMsg(`run #${id} started`)
+        setMsg(`run #${res.id} started`)
       }
-      const ws = backtestApi.wsProgress(id)
-      ws.onmessage = (ev: MessageEvent) => {
-        try {
-          const d = JSON.parse(ev.data as string) as { progress: number; done: boolean; error?: string }
-          setProgress(d.progress)
-          if (d.error) setMsg(`error: ${d.error}`)
-          if (d.done) { ws.close(); setRunning(false); setProgress(1) }
-        } catch { /* ignore */ }
-      }
-      ws.onerror = () => {
-        let tries = 0
-        const poll = async () => {
-          tries++
-          try {
-            const r = await backtestApi.getRun(id)
-            if (r.stats) { setProgress(1); setRunning(false); return }
-          } catch { /* ignore */ }
-          if (tries < 30) setTimeout(poll, 500)
-          else setRunning(false)
-        }
-        setTimeout(poll, 1000)
-      }
+      setRunId(res.id)
     } catch (e) {
       setMsg(String(e))
       setRunning(false)

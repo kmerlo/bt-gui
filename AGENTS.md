@@ -75,7 +75,7 @@ npm run gen:types  # rigenera src/types/bt.ts (BE su :8001)
 
 ## 5. Piani & integrazione
 
-- Piani in `./plans/`: `001-bootstrap` → `005-integration-stocks-app`. Segui l'ordine, rispetta STOP conditions e Done criteria. Advisor plans (db-quality): `advisor-plans/001-harden-commission-eval` → `014-refresh-stale-example`.
+- Piani in `./plans/`: `001-bootstrap` → `005-integration-stocks-app`. Segui l'ordine, rispetta STOP conditions e Done criteria. Advisor plans (db-quality): `plans/001-harden-commission-eval` → `014-refresh-stale-example`.
 - `APIRouter(prefix="/api/bt")` è il contratto con `Stocks_App` (plan 005 lo monta senza modifiche).
 
 ## 6. Git & release

@@ -4,7 +4,7 @@
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and
 > report — do not improvise. When done, update the status row for this plan
-> in `advisor-plans/README.md` — unless a reviewer dispatched you and told you they
+> in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
 > **Drift check (run first)**: `git diff --stat 8f78919..HEAD -- frontend/src/bt/store/btStore.ts`
@@ -133,7 +133,7 @@ But prefer keeping `createDefaultTree` imported from `treeOps` directly in calle
 - [ ] `ls frontend/src/bt/store/preset.ts frontend/src/bt/store/treeOps.ts` both exist
 - [ ] `npm run build --prefix frontend` exits 0
 - [ ] `uv run ruff check .` exits 0 (if BE untouched, trivially)
-- [ ] `advisor-plans/README.md` row 003 → DONE
+- [ ] `plans/README.md` row 003 → DONE
 
 ## STOP conditions
 

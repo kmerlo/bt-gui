@@ -4,7 +4,7 @@
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and
 > report — do not improvise. When done, update the status row for this plan
-> in `advisor-plans/README.md` — unless a reviewer dispatched you and told you they
+> in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
 > **Drift check (run first)**: `git diff --stat 8f78919..HEAD -- backend/api/routes.py .gitignore tests/backend/test_data_loader.py frontend/src/types/bt.ts`
@@ -114,7 +114,7 @@ No schema change; just fewer passes.
 - [ ] `grep -rn '__import__' backend` → 0
 - [ ] `uv run ruff check .` → 0 (was 1 error, now 0)
 - [ ] `.gitignore` contains `.env`
-- [ ] `advisor-plans/README.md` row 006 → DONE
+- [ ] `plans/README.md` row 006 → DONE
 
 ## STOP conditions
 

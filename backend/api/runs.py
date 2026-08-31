@@ -31,9 +31,18 @@ def list_runs(  # noqa: B008
     filter_max_drawdown: str | None = Query(None),
     filter_sharpe: str | None = Query(None),
     filter_sortino: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),  # noqa: B008
 ):
-    rows = db.query(DBRun).order_by(DBRun.id.desc()).all()
+    total = db.query(DBRun).count()
+    rows = (
+        db.query(DBRun)
+        .order_by(DBRun.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
     from backend.database import Strategy as DBStrategy
 
     strat_rows = db.query(DBStrategy).all()
@@ -161,7 +170,7 @@ def list_runs(  # noqa: B008
     for r in out:
         for k in [f"_{kk}" for kk in ["cagr", "total_return", "max_drawdown", "sharpe", "sortino"]]:
             r.pop(k, None)
-    return out
+    return {"data": out, "total": total, "limit": limit, "offset": offset}
 
 
 class BulkDeleteRunsRequest(BaseModel):

@@ -4,7 +4,7 @@
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and
 > report — do not improvise. When done, update the status row for this plan
-> in `advisor-plans/README.md` — unless a reviewer dispatched you and told you they
+> in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
 > **Drift check (run first)**: `git diff --stat 8f78919..HEAD -- backend/api/routes.py backend/main.py`
@@ -154,7 +154,7 @@ Run `uv run ruff check .` → 0, `uv run pytest -q` → all pass, `npm run build
 - [ ] `uv run ruff check .` exits 0
 - [ ] `uv run pytest -q` exits 0 (including new smoke test)
 - [ ] `npm run build --prefix frontend` exits 0
-- [ ] `advisor-plans/README.md` row 002 → DONE
+- [ ] `plans/README.md` row 002 → DONE
 
 ## STOP conditions
 

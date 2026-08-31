@@ -71,9 +71,9 @@ def health(db: Session = Depends(get_db)):  # noqa: B008
             "data_sources": db.query(DBSource).count(),
             "runs": db.query(DBRun).count(),
         }
-    except Exception as e:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         db_ok = False
-        db_error = str(e)
+        db_error = None
         counts = {"strategies": 0, "data_sources": 0, "runs": 0}
     try:
         version = _im.version("bt-gui")

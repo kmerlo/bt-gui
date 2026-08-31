@@ -2,9 +2,11 @@ import { WS_BASE, request } from './request'
 
 export type RunRow = { id: number; strategy_id: number | null; strategy_name: string | null; stats: Record<string, unknown> | null; config: Record<string, unknown>; created_at: string; start: string | null; end: string | null; cagr: number | null; total_return: number | null; max_drawdown: number | null; sharpe: number | null; sortino: number | null }
 
+export type RunsListResponse = { data: RunRow[]; total: number; limit: number; offset: number }
+
 export const backtestApi = {
   create: (req: unknown) => request<{ id: number; status: string; warnings?: string[] }>('/api/bt/backtest', { method: 'POST', body: JSON.stringify(req) }),
-  listRuns: (opts?: { search?: string; sort_by?: string; sort_dir?: string; filter_id?: string; filter_strategy_id?: string; filter_strategy_name?: string; filter_created_at?: string; filter_start?: string; filter_end?: string; filter_total_return?: string; filter_max_drawdown?: string; filter_sharpe?: string; filter_sortino?: string; filter_stats?: string }) => {
+  listRuns: (opts?: { search?: string; sort_by?: string; sort_dir?: string; filter_id?: string; filter_strategy_id?: string; filter_strategy_name?: string; filter_created_at?: string; filter_start?: string; filter_end?: string; filter_total_return?: string; filter_max_drawdown?: string; filter_sharpe?: string; filter_sortino?: string; filter_stats?: string; limit?: number; offset?: number }) => {
     const q = new URLSearchParams()
     if (opts?.search) q.set('search', opts.search)
     if (opts?.sort_by) q.set('sort_by', opts.sort_by)
@@ -20,8 +22,10 @@ export const backtestApi = {
     if (opts?.filter_sharpe) q.set('filter_sharpe', opts.filter_sharpe)
     if (opts?.filter_sortino) q.set('filter_sortino', opts.filter_sortino)
     if (opts?.filter_stats) q.set('filter_stats', opts.filter_stats)
+    if (opts?.limit !== undefined) q.set('limit', String(opts.limit))
+    if (opts?.offset !== undefined) q.set('offset', String(opts.offset))
     const qs = q.toString() ? `?${q.toString()}` : ''
-    return request<RunRow[]>(`/api/bt/runs${qs}`)
+    return request<RunsListResponse>(`/api/bt/runs${qs}`)
   },
   getRun: (id: number) => request<RunRow & { transactions?: unknown[] }>(`/api/bt/runs/${id}`),
   getPrices: (id: number, opts?: { start?: string; end?: string; limit?: number; offset?: number }) => {

@@ -4,7 +4,7 @@
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and
 > report — do not improvise. When done, update the status row for this plan
-> in `advisor-plans/README.md` — unless a reviewer dispatched you and told you they
+> in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
 > **Drift check (run first)**: `git diff --stat c83f4bf..HEAD -- frontend/src/api/bt.ts backend/api/strategies.py backend/api/data_sources.py backend/api/runs.py backend/api/price_data.py frontend/package.json`
@@ -179,7 +179,7 @@ Replace `DataManager.tsx:124` and `DataDetailView.tsx:71` inline `q_low in str(v
 - [ ] `uv run ruff check .` → 0
 - [ ] `npm run build --prefix frontend` → 0
 - [ ] `uv run pytest -q` → pass
-- [ ] `advisor-plans/README.md` row 008 → DONE
+- [ ] `plans/README.md` row 008 → DONE
 
 ## STOP conditions
 

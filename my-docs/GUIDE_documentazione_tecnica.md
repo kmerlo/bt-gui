@@ -145,4 +145,27 @@ Frontend API barrel: `frontend/src/api/bt.ts` re-exporta domini `strategies/algo
 
 ---
 
-*Ultimo aggiornamento: 2026-08-31*
+## Dipendenza da pacchetto `bt` (cartella `../bt`)
+
+Il backend usa il codice della libreria `bt` presente nella cartella gemella `../bt`. L'installazione avviene in **modalità editable** tramite `pyproject.toml`:
+
+```toml
+[tool.uv.sources]
+bt = { path = "../bt", editable = true }
+```
+
+Questo significa che ogni modifica al codice in `../bt` si propaga automaticamente a `bt-gui` senza reinstallazione.
+
+### Import dal pacchetto `bt`
+
+| File | Import |
+|------|--------|
+| `backend/services/tree_serializer.py:5,7` | `import bt` / `from bt.core import AlgoStack` |
+| `backend/services/algo_registry.py:7,8` | `import bt.algos` / `from bt.core import Algo` |
+| `backend/services/backtest_runner.py:141` | `import bt` |
+
+La dipendenza è dichiarata anche in `[project]` come `bt>=1.2.0`, ma la source editable sovrascrive il resolution a `../bt`.
+
+---
+
+*Ultimo aggiornamento: 2026-08-31* — aggiunta sezione dipendenza bt editable

@@ -4,7 +4,7 @@
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and
 > report — do not improvise. When done, update the status row for this plan
-> in `advisor-plans/README.md` — unless a reviewer dispatched you and told you they
+> in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
 > **Drift check (run first)**: `git diff --stat c83f4bf..HEAD -- pyproject.toml frontend/package.json .gitignore`
@@ -139,7 +139,7 @@ Create `tests/backend/test_price_data.py`:
 - [ ] `.env.example` and `.editorconfig` exist
 - [ ] `uv run pytest -q` → all pass incl. `test_price_data.py`
 - [ ] `npm run build --prefix frontend` → 0
-- [ ] `advisor-plans/README.md` row 009 → DONE
+- [ ] `plans/README.md` row 009 → DONE
 
 ## STOP conditions
 

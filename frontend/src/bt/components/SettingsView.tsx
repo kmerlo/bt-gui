@@ -85,8 +85,8 @@ export default function SettingsView() {
     setBusy(true)
     try {
       const rows = await backtestApi.listRuns()
-      if (rows.length === 0) { setHealthMsg('nessun run da eliminare'); return }
-      const r = await backtestApi.bulkDeleteRuns(rows.map((x) => x.id))
+      if ((rows.data ?? []).length === 0) { setHealthMsg('nessun run da eliminare'); return }
+      const r = await backtestApi.bulkDeleteRuns((rows.data ?? []).map((x) => x.id))
       setHealthMsg(`eliminati ${r.deleted} run`)
       handleHealth()
     } catch (e) { setHealthMsg(String(e)) } finally { setBusy(false) }

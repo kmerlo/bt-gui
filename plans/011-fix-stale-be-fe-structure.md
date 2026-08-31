@@ -4,7 +4,7 @@
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and
 > report — do not improvise. When done, update the status row for this plan
-> in `advisor-plans/README.md` — unless a reviewer dispatched you and told you they
+> in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
 > **Drift check (run first)**: `git diff --stat 198124c..HEAD -- my-docs/GUIDE-CODING_PRACTICES.md backend/api backend/services frontend/src/api frontend/src/bt/store frontend/src/hooks frontend/src/bt/components`
@@ -269,4 +269,4 @@ Stop and report back (do not improvise) if:
 
 - When a new router or service is added, update this section the same commit (keep GUIDE and AGENTS in sync; plan 013 adds cross-check note).
 - Reviewers should verify `ls` listings match the guide tree; stale tree is worse than no tree.
-- Follow-up deferred: `plans/SPEC.md:233` file tree — covered by advisor-plans/010, not here.
+- Follow-up deferred: `plans/SPEC.md:233` file tree — covered by plans/010, not here.

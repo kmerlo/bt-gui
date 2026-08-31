@@ -296,7 +296,7 @@ async def _run_background(
     volatility,
     indicators: dict[str, pd.DataFrame] | None = None,
 ):  # type: ignore[no-untyped-def]
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     await loop.run_in_executor(executor, run_backtest_sync, run_id, tree, cfg, price_df, additional, volume, volatility, indicators)
 
 

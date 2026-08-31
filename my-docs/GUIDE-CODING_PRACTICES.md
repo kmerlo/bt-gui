@@ -61,7 +61,7 @@ Senza regole esplicite, è facile:
 ✅ components/MetricsPanel.tsx (~69 righe) — grouping Daily/Monthly/Yearly
 ✅ Orchestratore ResultsDashboard.tsx (~69 righe) — solo composizione
 
-> Esempio vivo: vedi appunti_sviluppi.md:32 e advisor-plans/004-split-results-dashboard.md
+> Esempio vivo: vedi appunti_sviluppi.md:32 e plans/004-split-results-dashboard.md
 ```
 
 **Soglia pratica**: se un file supera le **300 righe**, chiediti: "Quali di queste responsabilità

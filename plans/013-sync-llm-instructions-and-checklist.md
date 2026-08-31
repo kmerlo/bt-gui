@@ -4,7 +4,7 @@
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and
 > report — do not improvise. When done, update the status row for this plan
-> in `advisor-plans/README.md` — unless a reviewer dispatched you and told you they
+> in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
 > **Drift check (run first)**: `git diff --stat 198124c..HEAD -- my-docs/GUIDE-CODING_PRACTICES.md AGENTS.md plans/README.md`
@@ -17,7 +17,7 @@
 - **Priority**: P1
 - **Effort**: S (1-2h)
 - **Risk**: LOW
-- **Depends on**: `advisor-plans/011-fix-stale-be-fe-structure.md` and `advisor-plans/012-port-db-inviolable-rule.md` (run after both, to sync final counts)
+- **Depends on**: `plans/011-fix-stale-be-fe-structure.md` and `plans/012-port-db-inviolable-rule.md` (run after both, to sync final counts)
 - **Category**: docs / dx
 - **Planned at**: commit `198124c`, 2026-08-30
 
@@ -135,7 +135,7 @@ Edit `AGENTS.md:77`:
 ```
 - Piani in `./plans/`: `001-bootstrap` → `005-integration-stocks-app`. Segui l'ordine, rispetta STOP conditions e Done criteria.
 ```
-→ `... 001-bootstrap → 006-indicator-support (e advisor-plans/001-011).` (reflect actual plans at 198124c: 001-006 in plans/, 001-011 in advisor-plans/).
+→ `... 001-bootstrap → 006-indicator-support (e plans/001-011).` (reflect actual plans at 198124c: 001-006 in plans/, 001-011 in plans/).
 
 Add a sync note below `AGENTS.md:3`:
 ```

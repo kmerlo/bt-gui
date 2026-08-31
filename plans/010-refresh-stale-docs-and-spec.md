@@ -4,7 +4,7 @@
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and
 > report — do not improvise. When done, update the status row for this plan
-> in `advisor-plans/README.md` — unless a reviewer dispatched you and told you they
+> in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
 > **Drift check (run first)**: `git diff --stat c83f4bf..HEAD -- my-docs/GUIDE_documentazione_tecnica.md my-docs/GUIDE_manuale_bt_gui.md my-docs/GUIDE-TUTORIAL_STRATEGIE.md my-docs/GUIDE-AVVIARE-GUI.md plans/SPEC.md`
@@ -112,7 +112,7 @@ Cross-link `GUIDE-TUTORIAL_STRATEGIE.md` as worked SMA-50 example. Replace place
 - [ ] `grep -q "yfinance" my-docs/GUIDE-TUTORIAL_STRATEGIE.md` and `grep -q "yfinance" plans/SPEC.md`
 - [ ] `grep -rn "docs/" my-docs/GUIDE-AVVIARE-GUI.md` → 0 (all `my-docs/`)
 - [ ] `uv run ruff check .` → 0
-- [ ] `advisor-plans/README.md` row 010 → DONE
+- [ ] `plans/README.md` row 010 → DONE
 
 ## STOP conditions
 

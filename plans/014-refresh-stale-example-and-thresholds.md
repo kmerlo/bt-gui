@@ -4,7 +4,7 @@
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and
 > report — do not improvise. When done, update the status row for this plan
-> in `advisor-plans/README.md` — unless a reviewer dispatched you and told you they
+> in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
 > **Drift check (run first)**: `git diff --stat 198124c..HEAD -- my-docs/GUIDE-CODING_PRACTICES.md frontend/src/bt/components frontend/src/types/bt.ts`
@@ -17,13 +17,13 @@
 - **Priority**: P2
 - **Effort**: S (1h)
 - **Risk**: LOW
-- **Depends on**: `advisor-plans/011-fix-stale-be-fe-structure.md` (needs updated file trees to keep example consistent)
+- **Depends on**: `plans/011-fix-stale-be-fe-structure.md` (needs updated file trees to keep example consistent)
 - **Category**: docs / tech-debt
 - **Planned at**: commit `198124c`, 2026-08-30
 
 ## Why this matters
 
-`GUIDE:54-56` uses `TreeEditor.tsx (600+ righe)` as the anti-pattern, but `TreeEditor.tsx:98` at `198124c` is already small. The most recent real split is `ResultsDashboard.tsx:548→69` (`appunti_sviluppi.md:32`, `advisor-plans/004-split-results-dashboard.md` DONE). Keeping a stale example makes the 300/500 thresholds feel hypothetical and reduces compliance. Also `GUIDE:64-66` says “mai superare 500” without excepting `frontend/src/types/bt.ts:439` (auto-generated, 439 lines, legit >300). Clarifying the exception prevents false alarms and aligns with `AGENTS.md:30` (300 pratica, 500 dura).
+`GUIDE:54-56` uses `TreeEditor.tsx (600+ righe)` as the anti-pattern, but `TreeEditor.tsx:98` at `198124c` is already small. The most recent real split is `ResultsDashboard.tsx:548→69` (`appunti_sviluppi.md:32`, `plans/004-split-results-dashboard.md` DONE). Keeping a stale example makes the 300/500 thresholds feel hypothetical and reduces compliance. Also `GUIDE:64-66` says “mai superare 500” without excepting `frontend/src/types/bt.ts:439` (auto-generated, 439 lines, legit >300). Clarifying the exception prevents false alarms and aligns with `AGENTS.md:30` (300 pratica, 500 dura).
 
 ## Current state
 
@@ -117,7 +117,7 @@ To (use live numbers, reference appunti and plan 004):
 ✅ components/MetricsPanel.tsx (~69 righe) — grouping Daily/Monthly/Yearly
 ✅ Orchestratore ResultsDashboard.tsx (~69 righe) — solo composizione
 
-> Esempio vivo: vedi appunti_sviluppi.md:32 e advisor-plans/004-split-results-dashboard.md
+> Esempio vivo: vedi appunti_sviluppi.md:32 e plans/004-split-results-dashboard.md
 ```
 Keep the ❌/✅ formatting and code-fence style.
 

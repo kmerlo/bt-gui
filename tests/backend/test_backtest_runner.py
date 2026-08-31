@@ -128,7 +128,10 @@ def test_list_runs():
     app.dependency_overrides.pop(_gdb, None)
     r = client.get("/api/bt/runs")
     assert r.status_code == 200
-    assert isinstance(r.json(), list)
+    j = r.json()
+    assert "data" in j
+    assert "total" in j
+    assert isinstance(j["data"], list)
 
 
 def test_ws_progress():

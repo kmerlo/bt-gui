@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from backend.api._helpers import _blob_to_df, _df_to_blob, _meta
+from backend.api._helpers import _blob_to_df, _df_to_blob, _err_msg, _meta
 from backend.api._query import apply_search, apply_sort
 from backend.database import DataSource as DBSource
 from backend.database import get_db
@@ -59,7 +59,7 @@ def fetch_data_source(req: FetchRequest, db: Session = Depends(get_db)):  # noqa
     try:
         df = fetch_ffn(req.tickers, req.start or "", req.end or "")
     except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e)) from e
+        raise HTTPException(status_code=502, detail=_err_msg(e))
     if df.empty:
         raise HTTPException(status_code=422, detail="empty result from ffn")
     blob = _df_to_blob(df)

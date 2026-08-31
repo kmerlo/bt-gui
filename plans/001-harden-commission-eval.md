@@ -4,7 +4,7 @@
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and
 > report — do not improvise. When done, update the status row for this plan
-> in `advisor-plans/README.md` — unless a reviewer dispatched you and told you they
+> in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
 > **Drift check (run first)**: `git diff --stat 8f78919..HEAD -- backend/models/backtest_config.py backend/services/backtest_runner.py frontend/src/bt/components/SettingsView.tsx frontend/src/bt/components/RunDialog.tsx`
@@ -158,7 +158,7 @@ Machine-checkable — ALL must hold:
 - [ ] `uv run ruff check .` exits 0
 - [ ] `npm run build --prefix frontend` exits 0 without `EVAL` warning
 - [ ] `uv run pytest -q` exits 0, including new commission tests
-- [ ] `advisor-plans/README.md` row for 001 updated to DONE
+- [ ] `plans/README.md` row for 001 updated to DONE
 
 ## STOP conditions
 

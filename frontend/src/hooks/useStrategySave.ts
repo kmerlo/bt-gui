@@ -73,12 +73,16 @@ export function useStrategySave() {
     try {
       if (savedId != null) {
         const r = await strategiesApi.update(savedId, toSave)
-        setTree(r.tree as unknown as StrategyTree)
+        const loaded = r.tree as unknown as StrategyTree | null | undefined
+        if (!loaded) { setMsg('invalid tree in response'); return }
+        setTree(loaded)
         setMsg(`updated #${savedId}`)
       } else {
         const r = await strategiesApi.create(toSave)
         setSavedId(r.id)
-        setTree(r.tree as unknown as StrategyTree)
+        const loaded2 = r.tree as unknown as StrategyTree | null | undefined
+        if (!loaded2) { setMsg('invalid tree in response'); return }
+        setTree(loaded2)
         setMsg(`saved #${r.id}`)
       }
       refreshList()
@@ -104,7 +108,9 @@ export function useStrategySave() {
     try {
       const r = await strategiesApi.create(toSave)
       setSavedId(r.id)
-      setTree(r.tree as unknown as StrategyTree)
+      const loaded3 = r.tree as unknown as StrategyTree | null | undefined
+      if (!loaded3) { setMsg('invalid tree in response'); return }
+      setTree(loaded3)
       setMsg(`saved as new #${r.id}`)
       refreshList()
     } catch (e) {
@@ -119,9 +125,13 @@ export function useStrategySave() {
     if (!sid) return
     try {
       const r = await strategiesApi.get(sid)
-      const t = r.tree as unknown as StrategyTree
-      setTree(t!)
-      setNameDraft(t!.name)
+      const t = r.tree as unknown as StrategyTree | null | undefined
+      if (!t) {
+        setMsg(`strategy #${sid} has no tree data`)
+        return
+      }
+      setTree(t)
+      setNameDraft(t.name)
       setSavedId(sid)
       setMsg(`loaded #${sid}`)
     } catch (e) {

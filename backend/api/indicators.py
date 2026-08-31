@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from backend.api._helpers import _df_to_blob
+from backend.api._helpers import _df_to_blob, _err_msg
 from backend.database import DataSource as DBSource
 from backend.database import get_db
 from backend.services.indicator_calculator import compute_indicator, get_indicator_defs
@@ -85,7 +85,7 @@ def compute_indicator_route(req: ComputeIndicatorRequest, db: Session = Depends(
     try:
         result, meta = compute_indicator(req.type, price_df, req.params)
     except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
+        raise HTTPException(status_code=422, detail=_err_msg(e))
     meta["indicator_type"] = req.type
     meta["params"] = req.params
     if not req.save:

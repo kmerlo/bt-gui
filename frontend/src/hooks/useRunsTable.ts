@@ -38,9 +38,9 @@ export function useRunsTable() {
         filter_stats: fStats || undefined,
       })
       .then((data) => {
-        setRuns(data)
+        setRuns(data.data ?? [])
         setSelected((prev) => {
-          const ids = new Set(data.map((r) => r.id))
+          const ids = new Set((data.data ?? []).map((r) => r.id))
           const n = new Set<number>()
           for (const id of prev) if (ids.has(id)) n.add(id)
           return n

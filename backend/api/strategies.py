@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from backend.api._helpers import _err_msg
 from backend.api._query import apply_search, apply_sort
 from backend.database import get_db
 from backend.models.strategy_tree import StrategyTree
@@ -18,7 +19,7 @@ def create_strategy(tree: StrategyTree, db: Session = Depends(get_db)):  # noqa:
     try:
         to_bt_strategy(tree)
     except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
+        raise HTTPException(status_code=422, detail=_err_msg(e))
     from backend.database import Strategy as DBStrategy
 
     existing = db.query(DBStrategy).filter(DBStrategy.name == tree.name).first()
@@ -83,7 +84,7 @@ def update_strategy_route(sid: int, tree: StrategyTree, db: Session = Depends(ge
     try:
         to_bt_strategy(tree)
     except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
+        raise HTTPException(status_code=422, detail=_err_msg(e))
     from backend.database import Strategy as DBStrategy
 
     dup = db.query(DBStrategy).filter(DBStrategy.name == tree.name, DBStrategy.id != sid).first()

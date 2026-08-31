@@ -4,7 +4,7 @@
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and
 > report — do not improvise. When done, update the status row for this plan
-> in `advisor-plans/README.md` — unless a reviewer dispatched you and told you they
+> in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
 > **Drift check (run first)**: `git diff --stat 8f78919..HEAD -- frontend/src/bt/components/BuilderView.tsx frontend/src/bt/store/btStore.ts`
@@ -128,7 +128,7 @@ Refactor `BuilderView.tsx` to ~120 lines:
 - [ ] `ls frontend/src/hooks/useTreeDrag.ts frontend/src/hooks/useStrategySave.ts` exist, each <150 lines
 - [ ] `grep -rn "findDup" frontend/src` → exactly 1 definition in `useStrategySave.ts` (no duplicate)
 - [ ] `npm run build --prefix frontend` exits 0
-- [ ] `advisor-plans/README.md` row 005 → DONE
+- [ ] `plans/README.md` row 005 → DONE
 
 ## STOP conditions
 
