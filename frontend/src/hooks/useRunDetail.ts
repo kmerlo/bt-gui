@@ -7,6 +7,8 @@ export function useRunDetail(runId: number | null) {
   const [stats, setStats] = useState<Record<string, unknown> | null>(null)
   const [tx, setTx] = useState<Record<string, unknown>[]>([])
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
+  const [runStart, setRunStart] = useState<string | null>(null)
+  const [runEnd, setRunEnd] = useState<string | null>(null)
 
   useEffect(() => { setSel(runId) }, [runId])
 
@@ -14,9 +16,13 @@ export function useRunDetail(runId: number | null) {
     backtestApi.getRun(id).then((r) => {
       setStats((r.stats as Record<string, unknown>) ?? null)
       setTx((r.transactions as Record<string, unknown>[]) ?? [])
+      setRunStart((r.config as Record<string, unknown>)?.start as string | null)
+      setRunEnd((r.config as Record<string, unknown>)?.end as string | null)
     }).catch(() => { /* ignore */ })
-    backtestApi.getPrices(id).then(setPrices).catch(() => { /* ignore */ })
-  }, [])
+    backtestApi.getPrices(id, { start: runStart ?? undefined, end: runEnd ?? undefined }).then((d) => {
+      setPrices({ dates: d.dates, values: d.values })
+    }).catch(() => { /* ignore */ })
+  }, [runStart, runEnd])
 
   const toggleExpanded = useCallback((id: number) => {
     setExpanded((prev) => {

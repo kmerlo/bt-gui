@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 
+import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -239,23 +240,40 @@ def get_run(run_id: int, db: Session = Depends(get_db)):  # noqa: B008
 
 
 @router.get("/runs/{run_id}/prices")
-def get_run_prices(run_id: int, db: Session = Depends(get_db)):  # noqa: B008
+def get_run_prices(
+    run_id: int,
+    start: str | None = Query(None),
+    end: str | None = Query(None),
+    limit: int = Query(2000, ge=1, le=20000),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),  # noqa: B008
+):
     row = db.query(DBRun).filter(DBRun.id == run_id).first()
     if row is None:
         raise HTTPException(status_code=404, detail="not found")
     if row.prices_parquet is None:
-        return {"dates": [], "values": [], "weights": {}}
+        return {"dates": [], "values": [], "weights": {}, "total": 0, "offset": 0, "limit": limit}
     df = _blob_to_df(row.prices_parquet)
-    dates = [str(i) for i in df.index]
-    if "price" in df.columns:
-        values = df["price"].tolist()
+    df = df.copy()
+    # filter by date range
+    if start or end:
+        df.index = pd.to_datetime(df.index)
+        if start:
+            df = df[df.index >= pd.to_datetime(start)]
+        if end:
+            df = df[df.index <= pd.to_datetime(end)]
+    total = len(df)
+    page = df.iloc[offset : offset + limit]
+    dates = [str(i) for i in page.index]
+    if "price" in page.columns:
+        values = page["price"].tolist()
         weights: dict[str, list] = {}
-        for c in df.columns:
+        for c in page.columns:
             if c != "price":
-                weights[c] = df[c].tolist()
-        return {"dates": dates, "values": values, "weights": weights}
-    first = df.columns[0]
-    return {"dates": dates, "values": df[first].tolist(), "weights": {}}
+                weights[c] = page[c].tolist()
+        return {"dates": dates, "values": values, "weights": weights, "total": total, "offset": offset, "limit": limit}
+    first = page.columns[0]
+    return {"dates": dates, "values": page[first].tolist(), "weights": {}, "total": total, "offset": offset, "limit": limit}
 
 
 @router.websocket("/backtest/{run_id}/progress")

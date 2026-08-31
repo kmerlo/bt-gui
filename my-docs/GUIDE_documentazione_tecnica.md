@@ -79,6 +79,27 @@ Gli indicatori salvati in `data_sources` (parquet_blob, `type='indicator'`) cont
 - `backtest_runs`: `strategy_id`, `config_json`, `stats_json`, `prices_parquet`, `weights_parquet`, `transactions_parquet`.
 - `strategies`: `name` unique, `tree_json` (StrategyTree JSON).
 
+### Backtest runs: architettura blob parquet
+
+I risultati del backtest sono salvati in 3 colonne `LargeBinary` come parquet bytes, non in tabelle separate:
+
+| Colonna | Contenuto | Forma tipica | Dimensione |
+|---|---|---|---|
+| `prices_parquet` | Equity curve (`price`) + facoltativamente colonne peso per ticker | `(N_dates, 1+N_tickers)` | ~10-50 KB/run |
+| `weights_parquet` | Pesi espliciti per ticker per riga temporale (solo strategie con pesi) | `(N_dates, N_tickers)` | ~5-20 KB/run |
+| `transactions_parquet` | Log operazioni da `bt_obj.strategy.get_transactions()` | `(N_tx, ~6-8)` | ~1-5 KB/run |
+
+**Perché parquet blob e non tabellare:** i dati di backtest hanno schema variabile (diversi run usano ticker diversi, diversi pesi) e non servono query complesse tra run. Il blob permette lettura atomica con `pd.read_parquet(blob)`.
+
+**Letture:**
+- `GET /runs/{id}/prices` → `_blob_to_df(prices_parquet)` → estrae colonna `price` + weights → array flat per chart FE. Supporta ora `start`/`end`/`limit`/`offset` (dall'8/31/2026).
+- `GET /runs/{id}` → `_blob_to_df(transactions_parquet).reset_index().head(100)` → lista di dict per TransactionsTable (max 100 righe).
+- Stats → già serializzati in `stats_json` (CAGR, Sharpe, maxDD ecc.) in formato JSON.
+
+> Scrittura in `backend/services/backtest_runner.py:239-274`: dopo il backtest, `prices`, `weights`, `transactions` vengono serializzati come parquet e upsertati sulla riga `BacktestRun`.
+
+**Paginazione equity curve** (dal 2026-08-31): `GET /api/bt/runs/{id}/prices` accetta query param `start`, `end`, `limit` (default 2000, max 20000), `offset`. Il backend legge il blob, filtra per data range, paginera le righe e restituisce `{dates, values, weights, total, offset, limit}`. Il frontend passa `start`/`end` dal `run.config` per default.
+
 ### Dual-DB isolation
 
 Due DB file: `bt_gui.db` (main, dati utente) e `bt_gui_test.db` (test). Scelta persistita in `active_db.txt` (`main`/`test`). Proxy `backend/database.py:33` `_EngineProxy`/`_SessionProxy` indirizza `engine`/`SessionLocal` in base a `ACTIVE_DB`. Endpoint `GET/POST /api/bt/db` via `backend/api/health.py:17` permette switch da FE (`SettingsView` + top bar). `tests/conftest.py:5` imposta `test` per tutta la sessione pytest, quindi dati utente in main non vengono toccati.
@@ -124,4 +145,4 @@ Frontend API barrel: `frontend/src/api/bt.ts` re-exporta domini `strategies/algo
 
 ---
 
-*Ultimo aggiornamento: 2026-08-30*
+*Ultimo aggiornamento: 2026-08-31*

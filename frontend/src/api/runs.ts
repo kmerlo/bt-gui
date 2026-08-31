@@ -24,7 +24,15 @@ export const backtestApi = {
     return request<RunRow[]>(`/api/bt/runs${qs}`)
   },
   getRun: (id: number) => request<RunRow & { transactions?: unknown[] }>(`/api/bt/runs/${id}`),
-  getPrices: (id: number) => request<{ dates: string[]; values: number[]; weights: Record<string, number[]> }>(`/api/bt/runs/${id}/prices`),
+  getPrices: (id: number, opts?: { start?: string; end?: string; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams()
+    if (opts?.start) q.set('start', opts.start)
+    if (opts?.end) q.set('end', opts.end)
+    if (opts?.limit !== undefined) q.set('limit', String(opts.limit))
+    if (opts?.offset !== undefined) q.set('offset', String(opts.offset))
+    const qs = q.toString() ? `?${q.toString()}` : ''
+    return request<{ dates: string[]; values: number[]; weights: Record<string, number[]>; total: number; offset: number; limit: number }>(`/api/bt/runs/${id}/prices${qs}`)
+  },
   deleteRun: (id: number) => request<void>(`/api/bt/runs/${id}`, { method: 'DELETE' }),
   bulkDeleteRuns: (ids: number[]) =>
     request<{ deleted: number; not_found: number[] }>('/api/bt/runs/bulk-delete', {
