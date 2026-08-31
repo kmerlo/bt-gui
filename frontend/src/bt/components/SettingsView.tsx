@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { btApi, strategiesApi, backtestApi, dbApi, loadSettings, saveSettings, defaultSettings, type BtSettings, type DbInfo } from '../../api/bt'
+import { priceSourceApi } from '../../api/settings'
 
 const S = {
   wrap: { padding: 12, color: '#c9d1d9' } as const,
@@ -21,18 +22,21 @@ const S = {
 
 export default function SettingsView() {
   const [settings, setSettings] = useState<BtSettings>(defaultSettings)
-  const [health, setHealth] = useState<{ status: string; version: string; db: string; db_error: string | null; counts: { strategies: number; data_sources: number; runs: number } } | null>(null)
+  const [health, setHealth] = useState<{ status: string; version: string; db: string; db_error: string | null; counts: { strategies: number; data_sources: number; runs: number }; price_source: string } | null>(null)
   const [healthMsg, setHealthMsg] = useState('')
   const [saveMsg, setSaveMsg] = useState('')
   const [busy, setBusy] = useState(false)
   const [dbInfo, setDbInfo] = useState<DbInfo | null>(null)
   const [dbMsg, setDbMsg] = useState('')
+  const [priceSource, setPriceSource] = useState<'local' | 'market'>('local')
+  const [priceSourceMsg, setPriceSourceMsg] = useState('')
 
   const handleHealth = async () => {
     setHealthMsg('')
     try {
       const h = await btApi.health()
       setHealth(h)
+      if (h.price_source) setPriceSource(h.price_source as 'local' | 'market')
     } catch (e) {
       setHealthMsg(String(e))
     }
@@ -43,6 +47,18 @@ export default function SettingsView() {
       const info = await dbApi.info()
       setDbInfo(info)
     } catch (e) { setDbMsg(String(e)) }
+  }
+
+  const handlePriceSourceChange = async (source: 'local' | 'market') => {
+    if (source === priceSource) return
+    try {
+      await priceSourceApi.set(source)
+      setPriceSource(source)
+      setPriceSourceMsg(source === 'market' ? 'sorgente: market.db (lettura sola)' : 'sorgente: locale (bt_gui.db)')
+      setTimeout(() => setPriceSourceMsg(''), 3000)
+    } catch (e) {
+      setPriceSourceMsg(String(e))
+    }
   }
 
   useEffect(() => {
@@ -248,6 +264,15 @@ export default function SettingsView() {
           </select>
           <span style={{ fontSize: 11, color: '#8b949e' }}>ffn → data_sources (parquet_blob); yfinance → price_data (tabellare)</span>
         </div>
+        <div style={S.row}>
+          <span style={S.label}>Sorgente prezzi</span>
+          <select style={S.input} value={priceSource} onChange={(e) => handlePriceSourceChange(e.target.value as 'local' | 'market')}>
+            <option value="local">locale (bt_gui.db)</option>
+            <option value="market">market.db (Solo lettura)</option>
+          </select>
+          <span style={{ fontSize: 11, color: '#8b949e' }}>{priceSource === 'market' ? 'lettura sola — fetch/delete disabilitati' : 'scrittura consentita'}</span>
+        </div>
+        {priceSourceMsg && <div style={{ fontSize: 11, color: '#3fb950', marginBottom: 4 }}>{priceSourceMsg}</div>}
         <div style={S.row}>
           <button type="button" style={S.btnPri} onClick={handleSave}>Salva</button>
         </div>

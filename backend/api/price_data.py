@@ -3,14 +3,14 @@ from __future__ import annotations
 from typing import Any
 
 import pandas as pd
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.api._query import apply_search
-from backend.database import PriceData as DBPriceData
 from backend.database import get_db
 from backend.services.data_loader import fetch_and_store_yf
+from backend.services.price_source import list_price_tickers, load_price_rows
 
 router = APIRouter(tags=["bt-gui"])
 
@@ -28,7 +28,14 @@ def list_price_data(
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),  # noqa: B008
 ):
-    # ponytail: capped list — full GROUP BY aggregation when >10k symbols
+    from backend.database import get_price_source
+
+    if get_price_source() == "market":
+        all_tickers = list_price_tickers()
+        return all_tickers[offset : offset + limit]
+    # local path — original behaviour
+    from backend.database import PriceData as DBPriceData
+
     rows = db.query(DBPriceData).order_by(DBPriceData.symbol, DBPriceData.date).all()
     by_symbol: dict[str, dict[str, Any]] = {}
     for r in rows:
@@ -48,6 +55,10 @@ def list_price_data(
 
 @router.post("/price-data/fetch", status_code=201)
 def fetch_price_data(req: FetchPriceRequest, db: Session = Depends(get_db)):  # noqa: B008
+    from backend.database import get_price_source
+
+    if get_price_source() == "market":
+        raise HTTPException(status_code=403, detail="price_data is read-only from market.db — use local source to fetch")
     count = fetch_and_store_yf(db, req.symbol, req.start, req.end, req.interval)
     return {"symbol": req.symbol.upper(), "rows": count}
 
@@ -64,6 +75,17 @@ def get_price_rows(
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),  # noqa: B008
 ):
+    from backend.database import get_price_source
+
+    if get_price_source() == "market":
+        rows = load_price_rows(symbol, start, end, sort_by, sort_dir, limit, offset)
+        if search:
+            rows = apply_search(rows, search, ["date", "open", "high", "low", "close", "adj_close", "volume"])
+        return rows
+
+    # local path — original behaviour
+    from backend.database import PriceData as DBPriceData
+
     q = db.query(DBPriceData).filter(DBPriceData.symbol == symbol.upper())
     if start:
         q = q.filter(DBPriceData.date >= pd.to_datetime(start))
@@ -104,6 +126,12 @@ def get_price_rows(
 
 @router.delete("/price-data/{symbol}", status_code=204)
 def delete_price_data(symbol: str, db: Session = Depends(get_db)):  # noqa: B008
+    from backend.database import get_price_source
+
+    if get_price_source() == "market":
+        raise HTTPException(status_code=403, detail="price_data is read-only from market.db — use local source to delete")
+    from backend.database import PriceData as DBPriceData
+
     deleted = db.query(DBPriceData).filter(DBPriceData.symbol == symbol.upper()).delete()
     db.commit()
     return {"deleted": deleted}

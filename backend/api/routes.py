@@ -9,6 +9,7 @@ from .data_sources import router as data_sources_router
 from .health import router as health_router
 from .indicators import router as indicators_router
 from .price_data import router as price_data_router
+from .price_source_settings import router as price_source_settings_router
 from .runs import router as runs_router
 from .strategies import router as strategies_router
 
@@ -22,3 +23,4 @@ router.include_router(price_data_router)
 router.include_router(indicators_router)
 router.include_router(backtest_router)
 router.include_router(runs_router)
+router.include_router(price_source_settings_router)

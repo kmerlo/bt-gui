@@ -7,6 +7,7 @@ export type BtSettings = {
   theme: 'dark'
   lang: 'it' | 'en'
   data_adapter: 'ffn' | 'yfinance'
+  price_source: 'local' | 'market'
 }
 export const defaultSettings: BtSettings = {
   initial_capital: 100000,
@@ -16,6 +17,7 @@ export const defaultSettings: BtSettings = {
   theme: 'dark',
   lang: 'it',
   data_adapter: 'ffn',
+  price_source: 'local',
 }
 export function loadSettings(): BtSettings {
   try {
@@ -31,7 +33,7 @@ export function saveSettings(s: BtSettings): void {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(s))
 }
 
-export type HealthInfo = { status: string; version: string; db: string; db_error: string | null; counts: { strategies: number; data_sources: number; runs: number } }
+export type HealthInfo = { status: string; version: string; db: string; db_error: string | null; counts: { strategies: number; data_sources: number; runs: number }; price_source: string }
 export type DbInfo = { active: 'main' | 'test'; dbs: { name: string; file: string; counts: { strategies: number; data_sources: number; runs: number } }[] }
 
 import { request } from './request'
@@ -43,4 +45,8 @@ export const btApi = {
 export const dbApi = {
   info: () => request<DbInfo>('/api/bt/db'),
   switch: (db: 'main' | 'test') => request<{ active: string; previous: string }>('/api/bt/db/switch', { method: 'POST', body: JSON.stringify({ db }) }),
+}
+export const priceSourceApi = {
+  get: () => request<{ source: string }>('/api/bt/settings/price-source'),
+  set: (source: 'local' | 'market') => request<{ source: string }>('/api/bt/settings/price-source', { method: 'POST', body: JSON.stringify({ source }) }),
 }

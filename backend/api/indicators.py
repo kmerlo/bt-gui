@@ -36,45 +36,66 @@ def list_indicator_defs():
     return get_indicator_defs()
 
 
+def _build_price_df(rows: list[dict[str, Any]], symbol: str) -> pd.DataFrame:
+    """Build a price DataFrame from a list of row dicts (both local and market sources)."""
+    price_df = pd.DataFrame([{"date": r["date"], symbol.upper(): r["close"]} for r in rows])
+    price_df = price_df.set_index("date").sort_index()
+    price_df.columns = [str(c).upper() for c in price_df.columns]
+    price_df = price_df.ffill()
+    return price_df
+
+
 @router.post("/indicators/compute", status_code=201)
 def compute_indicator_route(req: ComputeIndicatorRequest, db: Session = Depends(get_db)):  # noqa: B008
-    from backend.database import PriceData as DBPriceData
+    from backend.database import get_price_source
+    from backend.services.price_source import load_price_rows
 
-    rows = db.query(DBPriceData).filter(DBPriceData.symbol == req.symbol.upper())
-    if req.start:
-        rows = rows.filter(DBPriceData.date >= pd.to_datetime(req.start))
-    if req.end:
-        rows = rows.filter(DBPriceData.date <= pd.to_datetime(req.end))
-    rows = rows.order_by(DBPriceData.date.asc()).all()
+    if get_price_source() == "market":
+        rows = load_price_rows(req.symbol, req.start, req.end)
+    else:
+        from backend.database import PriceData as DBPriceData
 
-    # ponytail: detect staled price data and auto-recalculate
+        q = db.query(DBPriceData).filter(DBPriceData.symbol == req.symbol.upper())
+        if req.start:
+            q = q.filter(DBPriceData.date >= pd.to_datetime(req.start))
+        if req.end:
+            q = q.filter(DBPriceData.date <= pd.to_datetime(req.end))
+        q = q.order_by(DBPriceData.date.asc())
+        raw_rows = q.all()
+        rows = [
+            {
+                "date": str(r.date)[:10],
+                "open": float(r.open) if r.open is not None else None,
+                "high": float(r.high) if r.high is not None else None,
+                "low": float(r.low) if r.low is not None else None,
+                "close": float(r.close) if r.close is not None else None,
+                "adj_close": float(r.adj_close) if r.adj_close is not None else None,
+                "volume": int(r.volume) if r.volume is not None else None,
+            }
+            for r in raw_rows
+        ]
+
+    # ponytail: detect staled price data and auto-recalculate (local only)
     warnings: list[str] = []
     if rows:
-        price_df = pd.DataFrame(
-            [
-                {
-                    "date": r.date,
-                    req.symbol.upper(): r.close,
-                }
-                for r in rows
-            ]
-        )
-        price_df = price_df.set_index("date").sort_index()
-        price_df.columns = [str(c).upper() for c in price_df.columns]
-        price_df = price_df.ffill()
-        # check if newer prices exist beyond requested end
-        if req.end:
+        price_df = _build_price_df(rows, req.symbol)
+        if req.end and get_price_source() == "local":
+            from backend.database import PriceData as DBPriceData
+
             latest_row = db.query(DBPriceData).filter(
                 DBPriceData.symbol == req.symbol.upper(),
                 DBPriceData.date > pd.to_datetime(req.end),
             ).order_by(DBPriceData.date.desc()).first()
             if latest_row:
-                # re-fetch full range to include new data
                 all_rows = db.query(DBPriceData).filter(DBPriceData.symbol == req.symbol.upper()).order_by(DBPriceData.date.asc()).all()
-                price_df = pd.DataFrame([{"date": r.date, req.symbol.upper(): r.close} for r in all_rows])
-                price_df = price_df.set_index("date").sort_index()
-                price_df.columns = [str(c).upper() for c in price_df.columns]
-                price_df = price_df.ffill()
+                rows_full = [
+                    {
+                        "date": str(r.date)[:10],
+                        "close": float(r.close) if r.close is not None else None,
+                    }
+                    for r in all_rows
+                ]
+                price_df = _build_price_df(rows_full, req.symbol)
                 warnings.append(f"Prezzi più recenti per {req.symbol.upper()} disponibili (dal {str(latest_row.date)[:10]}): l'indicatore è stato ricalcolato con tutto il range.")
     else:
         from backend.services.data_loader import fetch_yf_df

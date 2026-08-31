@@ -2,18 +2,23 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock
 
 from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, JSON, LargeBinary, String, create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 DATABASE_URL_MAIN = "sqlite:///./bt_gui.db"
 DATABASE_URL_TEST = "sqlite:///./bt_gui_test.db"
+DATABASE_URL_MARKET = "sqlite:///../Stocks_App/backend/market.db"
 ACTIVE_DB_FILE = Path("./active_db.txt")
+PRICE_SOURCE_FILE = Path("./price_source.txt")
 
 engine_main = create_engine(DATABASE_URL_MAIN, connect_args={"check_same_thread": False})
 engine_test = create_engine(DATABASE_URL_TEST, connect_args={"check_same_thread": False})
+engine_market = create_engine(DATABASE_URL_MARKET, connect_args={"check_same_thread": False})
 SessionLocal_main = sessionmaker(bind=engine_main)
 SessionLocal_test = sessionmaker(bind=engine_test)
+SessionLocal_market = sessionmaker(bind=engine_market)
 
 
 # active DB selection persisted in file (so restart keeps choice)
@@ -78,6 +83,28 @@ def get_session_local(name: str | None = None):
     if name is None:
         name = ACTIVE_DB
     return SessionLocal_main if name == "main" else SessionLocal_test
+
+
+# price source selection (local = bt_gui.db, market = Stocks_App/backend/market.db)
+_PRICE_SOURCE_LOCK = Lock()
+_PRICE_SOURCE: str = "local"
+
+
+def get_price_source() -> str:
+    return _PRICE_SOURCE
+
+
+def set_price_source(source: str) -> str:
+    global _PRICE_SOURCE
+    if source not in ("local", "market"):
+        raise ValueError(f"price_source must be 'local' or 'market', got {source}")
+    with _PRICE_SOURCE_LOCK:
+        _PRICE_SOURCE = source
+        try:
+            PRICE_SOURCE_FILE.write_text(source)
+        except Exception:
+            pass
+    return source
 
 
 class Base(DeclarativeBase):

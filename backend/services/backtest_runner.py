@@ -41,7 +41,22 @@ def _load_prices_from_db(
     end: str | None,
     price_column: str = "close",
 ) -> pd.DataFrame:
-    """Load price data from price_data table, pivot to DataFrame for bt framework."""
+    """Load price data from the configured price source, pivot to DataFrame for bt framework."""
+    from backend.database import get_price_source
+
+    if get_price_source() == "market":
+        return _load_prices_from_market(tickers, start, end, price_column)
+
+    return _load_prices_from_local(tickers, start, end, price_column)
+
+
+def _load_prices_from_local(
+    tickers: list[str],
+    start: str | None,
+    end: str | None,
+    price_column: str = "close",
+) -> pd.DataFrame:
+    """Load price data from local price_data table (bt_gui.db)."""
     from backend.database import PriceData as DBPriceData
 
     db = SessionLocal()
@@ -78,6 +93,52 @@ def _load_prices_from_db(
         return df
     finally:
         db.close()
+
+
+def _load_prices_from_market(
+    tickers: list[str],
+    start: str | None,
+    end: str | None,
+    price_column: str = "close",
+) -> pd.DataFrame:
+    """Load price data from market.db (read-only) via raw SQL."""
+    from backend.database import engine_market
+    from sqlalchemy import text
+
+    conn = engine_market.connect()
+    try:
+        placeholders = ",".join(f":t{i}" for i in range(len(tickers)))
+        params = {f"t{i}": t.upper() for i, t in enumerate(tickers)}
+        sql = f"SELECT symbol, date, open, high, low, close, adj_close, volume FROM price_data WHERE symbol IN ({placeholders})"
+        if start:
+            sql += " AND date >= :start"
+            params["start"] = start
+        if end:
+            sql += " AND date <= :end"
+            params["end"] = end
+        sql += " ORDER BY date ASC"
+        result = conn.execute(text(sql), params)
+        rows = result.fetchall()
+
+        if not rows:
+            raise ValueError(f"No price data found for tickers {tickers}")
+
+        df = pd.DataFrame(
+            [
+                {
+                    "date": r.date,
+                    r.symbol.upper(): getattr(r, price_column) if price_column != "close" else r.close,
+                }
+                for r in rows
+            ]
+        )
+        df = df.set_index("date").sort_index()
+        df.columns = [str(c).upper() for c in df.columns]
+        df = df.groupby(df.index).first()
+        df = df.ffill()
+        return df
+    finally:
+        conn.close()
 
 
 def _build_commission(cfg: BacktestConfig):  # type: ignore[no-untyped-def]

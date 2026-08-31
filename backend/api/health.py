@@ -79,7 +79,16 @@ def health(db: Session = Depends(get_db)):  # noqa: B008
         version = _im.version("bt-gui")
     except Exception:  # noqa: BLE001
         version = "0.1.0"
-    return {"status": "ok" if db_ok else "error", "version": version, "db": "ok" if db_ok else "error", "db_error": db_error, "counts": counts}
+    from backend.database import get_price_source
+
+    return {
+        "status": "ok" if db_ok else "error",
+        "version": version,
+        "db": "ok" if db_ok else "error",
+        "db_error": db_error,
+        "counts": counts,
+        "price_source": get_price_source(),
+    }
 
 
 @router.get("/stats")
