@@ -44,7 +44,6 @@ Origine: `backend/services/data_loader.py:78` `fetch_and_store_yf(db, symbol, st
 ### Unified Data Adapter (`/api/bt/data`) — dal 2026-08-31
 
 Endpoint unificato che instrada in base all'adapter selezionato nelle impostazioni:
-
 | Endpoint | Adapter | Destinazione salvataggio |
 |---|---|---|
 | `POST /api/bt/data/fetch` | `ffn` | `data_sources` (parquet_blob) |
@@ -52,6 +51,22 @@ Endpoint unificato che instrada in base all'adapter selezionato nelle impostazio
 | `GET /api/bt/data/list` | — | RESTITUISCE entrambe le tabelle |
 
 Il frontend legge `data_adapter` da `localStorage` (chiave `bt-settings:v1`) e passa l'adapter al fetch. Il componente `DataManager` usa `dataApi.fetch(adapter, params)` e `dataApi.listUnified()`.
+
+### Indicator freshness checks — dal 2026-08-31
+
+Gli indicatori salvati in `data_sources` (parquet_blob, `type='indicator'`) contengono nel meta un campo `date_range {start, end}` calcolato dall'index del DataFrame.
+
+**Check al compute** (`backend/api/indicators.py:40-94`):
+- Se il DB `price_data` contiene righe con date successive all'`end` richiesto → il backend ricalcola automaticamente l'indicatore con tutto il range disponibile e restituisce un warning in risposta.
+- L'utente vede il banner giallo nell'IndicatorPanel che spiega cosa è successo.
+
+**Check al backtest** (`backend/api/backtest.py:110-126`):
+- Per ogni indicatore usato, confronta `meta.date_range` con `config.start`/`end` della strategia.
+- Se lo start dell'indicatore è successivo allo start strategia → warning (dati mancanti all'inizio).
+- Se l'end dell'indicatore è precedente all'end strategia → warning con istruzione: "Ricalcola l'indicatore nella sezione Indicators".
+- I warning vengono restituiti in `POST /api/bt/backtest` e mostrati in RunDialog come box arancione prima dell'avvio.
+
+**Perché parquet blob e non tabellare:** gli indicatori hanno strutture variabili (RSI = 1 colonna, MACD = 3 colonne, Bollinger = 3 colonne). Blob parquet evita una tabella dedicata per ogni tipo di indicatore e permette lettura rapida con `pd.read_parquet(blob)`.
 
 ### Formati di archiviazione
 
