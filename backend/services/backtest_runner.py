@@ -230,7 +230,7 @@ def run_backtest_sync(
                 normed[iid] = df  # type: ignore[assignment]
             indicators = normed
         tree = _normalize_tree(tree)
-        strategy = to_bt_strategy(tree, indicators or {})
+        strategy = to_bt_strategy(tree, indicators or {}, price_df)
         commissions = _build_commission(cfg)
         bt_obj = bt.Backtest(
             strategy,

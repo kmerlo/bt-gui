@@ -66,24 +66,49 @@ function AlgoItem({
           {Object.entries(schema.properties).map(([k, meta]) => {
             const val = (algo.params as Record<string, unknown>)[k]
             const t = meta.type
-            // indicator ref → render select with available indicators
+            // indicator ref → render select with available indicators + signal condition
             if ((meta as Record<string, unknown>).kind === 'indicator') {
+              const cond = (algo as Record<string, unknown>).signal_condition as Record<string, unknown> | null | undefined
+              const condOp = (cond as Record<string, unknown>)?.op as string | undefined
               return (
-                <label key={k} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <div key={k} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <span style={S.label}>{k}</span>
-                  <select
-                    value={val as string ?? ''}
-                    onChange={(e) => onUpdate({ [k]: e.target.value || undefined })}
-                    style={S.sel}
-                  >
-                    <option value="">None</option>
-                    {indicatorSources.map((ind) => (
-                      <option key={ind.id} value={String(ind.id)}>
-                         #{ind.id} {ind.name} ({String((ind.meta as Record<string, unknown>)?.indicator_type ?? '?')})
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                  <div style={S.row}>
+                    <select
+                      value={val as string ?? ''}
+                      onChange={(e) => onUpdate({ [k]: e.target.value || undefined })}
+                      style={{ ...S.sel, flex: 1 }}
+                    >
+                      <option value="">None</option>
+                      {indicatorSources.map((ind) => (
+                        <option key={ind.id} value={String(ind.id)}>
+                          #{ind.id} {ind.name} ({String((ind.meta as Record<string, unknown>)?.indicator_type ?? '?')})
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={condOp ?? ''}
+                      onChange={(e) => {
+                        const op = e.target.value
+                        const nextCond = op ? { op } : null
+                        ;(algo as Record<string, unknown>).signal_condition = nextCond
+                        onUpdate({ [k]: val })
+                        // also dispatch signal_condition update via a special key
+                        onUpdate({ __signal_condition__: nextCond ?? undefined })
+                      }}
+                      style={{ ...S.sel, flex: 0, minWidth: 140 }}
+                      title="Signal condition"
+                    >
+                      <option value="">— nessuna —</option>
+                      <option value="above">price {'>'} indicator</option>
+                      <option value="below">price {'<'} indicator</option>
+                      <option value="gt">indicator {'>'} 0</option>
+                      <option value="lt">indicator {'<'} 0</option>
+                      <option value="cross_over">crossover</option>
+                      <option value="cross_down">crossunder</option>
+                    </select>
+                  </div>
+                </div>
               )
             }
             // enum via string with options? BE currently always string
@@ -155,10 +180,15 @@ export default function AlgoStack({ nodeId }: { nodeId: string }) {
       .catch((e) => {
         console.error('[AlgoStack] Failed to load algos:', e)
       })
+    const refresh = () => {
+      dataApi.listIndicators().then(setIndicatorSources).catch(() => { /* ignore */ })
+    }
     dataApi
       .listIndicators()
       .then(setIndicatorSources)
       .catch(() => { /* ignore */ })
+    window.addEventListener('bt-indicator-refresh', refresh)
+    return () => window.removeEventListener('bt-indicator-refresh', refresh)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const grouped = useMemo(() => {
@@ -185,7 +215,14 @@ export default function AlgoStack({ nodeId }: { nodeId: string }) {
 
   const updateAt = (i: number, patch: Record<string, unknown>) => {
     if (!node || !node.id) return
-    const next = algos.map((a, j) => (j === i ? { ...a, params: { ...a.params, ...patch } } : a))
+    const next = algos.map((a, j) => {
+      if (j !== i) return a
+      const base = { ...a, params: { ...a.params, ...patch } }
+      // handle signal_condition as top-level field
+      const sc = patch['__signal_condition__']
+      if (sc !== undefined) return { ...base, signal_condition: sc ?? null }
+      return base
+    })
     updateNode(node.id!, { algos: next } as unknown as Partial<NonNullable<typeof node>>)
   }
 

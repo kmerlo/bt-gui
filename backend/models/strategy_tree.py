@@ -11,6 +11,7 @@ from backend.models.backtest_config import BacktestConfig
 class AlgoConfig(BaseModel):
     class_name: str
     params: dict[str, Any] = {}
+    signal_condition: dict[str, Any] | None = None
 
 
 class NodeConfig(BaseModel):

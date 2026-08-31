@@ -110,9 +110,6 @@ def create_backtest(req: RunRequest, db: Session = Depends(get_db)):  # noqa: B0
             continue
         ind_df = _blob_to_df(ind_row.parquet_blob)
         ind_df.index = pd.to_datetime(ind_df.index)
-        # Convert non-boolean signal dataframes to boolean (raw values → notna)
-        if not ind_df.empty and not ind_df.dtypes.apply(lambda t: t is bool).all():
-            ind_df = ind_df.notna()
         indicators[str(ind_id)] = ind_df
         # check date coverage against strategy range
         ind_meta: dict[str, Any] = ind_row.meta_json or {}
