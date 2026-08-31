@@ -53,6 +53,7 @@ export default function IndicatorPanel() {
   const [nameDraft, setNameDraft] = useState('')
   const [msg, setMsg] = useState('')
   const [computing, setComputing] = useState(false)
+  const [warnings, setWarnings] = useState<string[]>([])
 
   useEffect(() => {
     priceDataApi.list().then(setTickers).catch(() => { /* ignore */ })
@@ -68,8 +69,9 @@ export default function IndicatorPanel() {
     if (!selTicker) { setMsg('select ticker'); return }
     if (!selType) { setMsg('select indicator type'); return }
     setComputing(true)
-    setMsg('')
-    try {
+      setMsg('')
+      setWarnings([])
+      try {
       const t = tickers.find((r) => r.symbol === selTicker)
       const r = await dataApi.computeIndicator({
         symbol: selTicker,
@@ -81,6 +83,9 @@ export default function IndicatorPanel() {
         name: nameDraft.trim() || undefined,
       })
       setMsg(`saved ${r.name}`)
+      if (r.warnings?.length) {
+        setWarnings(r.warnings)
+      }
       setIndicators((prev) => [{ id: r.id, name: r.name, meta: r.meta }, ...prev])
       setNameDraft('')
     } catch (e) {
@@ -129,7 +134,12 @@ export default function IndicatorPanel() {
         {computing ? 'Computing…' : 'Compute & Save'}
       </button>
 
-      {msg && <span style={msg.startsWith('error') ? S.err : S.msg}>{msg}</span>}
+      {msg && <span style={S.err}>{msg}</span>}
+      {warnings.length > 0 && (
+        <div style={{ background: '#3d2c00', border: '1px solid #9e6a16', borderRadius: 6, padding: '6px 8px', fontSize: 11, color: '#f0c040', lineHeight: 1.5 }}>
+          {warnings.map((w, i) => <div key={i}>⚠️ {w}</div>)}
+        </div>
+      )}
 
       {indicators.length > 0 && (
         <>

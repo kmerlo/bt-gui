@@ -198,5 +198,6 @@ def compute_indicator(type_str: str, df: pd.DataFrame, params: dict) -> tuple[pd
         else:
             merged[key] = p["default"]
     result = fn(df, **merged)
-    meta = {"indicator_type": type_str, "params": merged}
+    idx = pd.to_datetime(result.index if hasattr(result, "index") else next(iter(result.values())).index)
+    meta = {"indicator_type": type_str, "params": merged, "date_range": {"start": str(idx.min())[:10], "end": str(idx.max())[:10]}}
     return result, meta

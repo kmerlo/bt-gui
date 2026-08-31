@@ -3,7 +3,7 @@ import { WS_BASE, request } from './request'
 export type RunRow = { id: number; strategy_id: number | null; strategy_name: string | null; stats: Record<string, unknown> | null; config: Record<string, unknown>; created_at: string; start: string | null; end: string | null; cagr: number | null; total_return: number | null; max_drawdown: number | null; sharpe: number | null; sortino: number | null }
 
 export const backtestApi = {
-  create: (req: unknown) => request<{ id: number; status: string }>('/api/bt/backtest', { method: 'POST', body: JSON.stringify(req) }),
+  create: (req: unknown) => request<{ id: number; status: string; warnings?: string[] }>('/api/bt/backtest', { method: 'POST', body: JSON.stringify(req) }),
   listRuns: (opts?: { search?: string; sort_by?: string; sort_dir?: string; filter_id?: string; filter_strategy_id?: string; filter_strategy_name?: string; filter_created_at?: string; filter_start?: string; filter_end?: string; filter_total_return?: string; filter_max_drawdown?: string; filter_sharpe?: string; filter_sortino?: string; filter_stats?: string }) => {
     const q = new URLSearchParams()
     if (opts?.search) q.set('search', opts.search)

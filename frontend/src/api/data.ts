@@ -71,7 +71,7 @@ export const dataApi = {
     }),
   listIndicators: () => request<DataSourceRow[]>('/api/bt/indicators'),
   computeIndicator: (req: { symbol: string; start?: string; end?: string; type: string; params: Record<string, unknown>; save?: boolean; name?: string }) =>
-    request<{ id: number; name: string; meta: IndicatorMeta }>('/api/bt/indicators/compute', {
+    request<{ id: number; name: string; meta: IndicatorMeta; warnings?: string[] }>('/api/bt/indicators/compute', {
       method: 'POST',
       body: JSON.stringify(req),
     }),

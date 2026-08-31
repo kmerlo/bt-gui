@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -97,6 +99,7 @@ def create_backtest(req: RunRequest, db: Session = Depends(get_db)):  # noqa: B0
     preset_ids = getattr(getattr(tree, "preset", None), "indicator_source_ids", []) or []
     all_ind_ids = list(dict.fromkeys([*req.indicator_source_ids, *preset_ids]))
     ind_rows_map = {r.id: r for r in db.query(DBSource).filter(DBSource.id.in_(all_ind_ids)).all()} if all_ind_ids else {}
+    indicator_warnings: list[str] = []
     for ind_id in all_ind_ids:
         ind_row = ind_rows_map.get(ind_id)
         if ind_row is None or ind_row.parquet_blob is None:
@@ -104,10 +107,27 @@ def create_backtest(req: RunRequest, db: Session = Depends(get_db)):  # noqa: B0
         ind_df = _blob_to_df(ind_row.parquet_blob)
         ind_df.index = pd.to_datetime(ind_df.index)
         indicators[str(ind_id)] = ind_df
+        # check date coverage against strategy range
+        ind_meta: dict[str, Any] = ind_row.meta_json or {}
+        ind_range: dict[str, str] = ind_meta.get("date_range") or {}
+        ind_start: str | None = ind_range.get("start")
+        ind_end: str | None = ind_range.get("end")
+        strat_start = req.config.start
+        strat_end = req.config.end
+        if ind_start and strat_start and pd.to_datetime(ind_start) > pd.to_datetime(strat_start):
+            msg_start = (f"Indicatore {ind_row.name}: range ({ind_start}→{ind_end}) "
+                         f"più ristretto di start strategia ({strat_start}). "
+                         f"Il backtest userà solo dati fino a {ind_end}.")
+            indicator_warnings.append(msg_start)
+        if ind_end and strat_end and pd.to_datetime(ind_end) < pd.to_datetime(strat_end):
+            msg_end = (f"Indicatore {ind_row.name}: range ({ind_start}→{ind_end}) "
+                       f"più corto di end strategia ({strat_end}). "
+                       f"Ricalcola l'indicatore nella sezione Indicators.")
+            indicator_warnings.append(msg_end)
     try:
         from backend.services.backtest_runner import schedule_backtest
 
         schedule_backtest(run_id, tree, req.config, price_df, additional, volume, volatility, indicators)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"id": run_id, "status": "running"}
+    return {"id": run_id, "status": "running", "warnings": indicator_warnings}

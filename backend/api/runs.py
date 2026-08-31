@@ -234,6 +234,7 @@ def get_run(run_id: int, db: Session = Depends(get_db)):  # noqa: B008
         "start": start,
         "end": end,
         "transactions": tx,
+        "warnings": (row.stats_json or {}).get("warnings") if isinstance(row.stats_json, dict) else None,
     }
 
 

@@ -44,6 +44,7 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
   const [msg, setMsg] = useState('')
   const [progress, setProgress] = useState(0)
   const [running, setRunning] = useState(false)
+  const [indicatorWarnings, setIndicatorWarnings] = useState<string[]>([])
   const capital = backtestConfig.initial_capital
   const integerPos = backtestConfig.integer_positions
   const simpleFn = backtestConfig.simple_fn
@@ -112,7 +113,12 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
       })
       const id = res.id
       onRunCreated?.(id)
-      setMsg(`run #${id} started`)
+      if (res.warnings?.length) {
+        setIndicatorWarnings(res.warnings)
+        setMsg(`run #${id} started (⚠️ ${res.warnings.length} warning(i))`)
+      } else {
+        setMsg(`run #${id} started`)
+      }
       const ws = backtestApi.wsProgress(id)
       ws.onmessage = (ev: MessageEvent) => {
         try {
@@ -196,6 +202,15 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
       {running && (
         <div style={{ marginTop: 8, background: '#21262d', borderRadius: 6, height: 8, overflow: 'hidden' }}>
           <div style={{ width: `${Math.round(progress * 100)}%`, background: '#238636', height: '100%' }} />
+        </div>
+      )}
+      {indicatorWarnings.length > 0 && (
+        <div style={{ marginTop: 8, background: '#3d2c00', border: '1px solid #9e6a16', borderRadius: 6, padding: '8px 10px', fontSize: 11, color: '#f0c040', lineHeight: 1.6 }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>⚠️ Indicatori obsoleti rilevati</div>
+          {indicatorWarnings.map((w, i) => <div key={i}>{w}</div>)}
+          <div style={{ marginTop: 6, color: '#c9d1d9' }}>
+            Per risolvere: vai nella sezione <b>Indicators</b>, seleziona il ticker interessato e premi <b>Compute & Save</b> per ricalcolare con i dati più recenti.
+          </div>
         </div>
       )}
       {msg && <div style={{ fontSize: 12, color: '#8b949e', marginTop: 6 }}>{msg}</div>}

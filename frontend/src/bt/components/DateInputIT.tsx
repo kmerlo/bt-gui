@@ -1,18 +1,19 @@
 import { useEffect, useState } from 'react'
-import { formatDate, parseDateIT } from '../../utils/format'
+import { parseDateIT } from '../../utils/format'
 
 type Props = {
   value: string
   onChange: (iso: string) => void
   style?: React.CSSProperties
   placeholder?: string
+  tooltip?: string
 }
 
-export default function DateInputIT({ value, onChange, style, placeholder = 'gg/mm/aaaa' }: Props) {
-  const [draft, setDraft] = useState(() => formatDate(value))
+export default function DateInputIT({ value, onChange, style, placeholder = 'gg/mm/aaaa', tooltip }: Props) {
+  const [draft, setDraft] = useState(() => value ?? '')
   const [invalid, setInvalid] = useState(false)
 
-  useEffect(() => { setDraft(formatDate(value)); setInvalid(false) }, [value])
+  useEffect(() => { setDraft(value ?? ''); setInvalid(false) }, [value])
 
   const handleChange = (v: string) => {
     setDraft(v)
@@ -31,19 +32,31 @@ export default function DateInputIT({ value, onChange, style, placeholder = 'gg/
     const t = draft.trim()
     if (!t) { onChange(''); setDraft(''); setInvalid(false); return }
     const iso = parseDateIT(t)
-    if (iso) { onChange(iso); setDraft(formatDate(iso)); setInvalid(false) }
+    if (iso) { onChange(iso); setDraft(iso); setInvalid(false) }
     else setInvalid(true)
   }
 
   return (
-    <input
-      type="text"
-      inputMode="numeric"
-      placeholder={placeholder}
-      value={draft}
-      onChange={(e) => handleChange(e.target.value)}
-      onBlur={handleBlur}
-      style={invalid ? { ...style, borderColor: '#f85149' } : style}
-    />
+    <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+      {tooltip && (
+        <span
+          style={{ position: 'absolute', bottom: 'calc(100% + 4px)', left: 0, background: '#1f2328', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 4, padding: '2px 6px', fontSize: 11, whiteSpace: 'nowrap', pointerEvents: 'none', display: 'none' }}
+          className="date-tooltip"
+        >
+          {tooltip}
+        </span>
+      )}
+      <input
+        type="text"
+        inputMode="numeric"
+        placeholder={placeholder}
+        value={draft}
+        onChange={(e) => handleChange(e.target.value)}
+        onBlur={handleBlur}
+        onFocus={(e) => { const tip = e.currentTarget.parentElement?.querySelector<HTMLElement>('.date-tooltip'); if (tip) tip.style.display = 'block' }}
+        onMouseLeave={(e) => { const tip = e.currentTarget.parentElement?.querySelector<HTMLElement>('.date-tooltip'); if (tip) tip.style.display = 'none' }}
+        style={invalid ? { ...style, borderColor: '#f85149' } : style}
+      />
+    </span>
   )
 }
