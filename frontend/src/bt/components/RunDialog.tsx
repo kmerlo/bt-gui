@@ -52,18 +52,7 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
     priceDataApi.list().then((rows) => setAvailableTickers(rows.map((r) => r.symbol))).catch(() => { /* ignore */ })
   }, [])
 
-  useEffect(() => {
-    if (!tree) return
-    const treeTickers = collectTickers(tree.root)
-    setSelectedTickers((prev) => {
-      const prevSet = new Set(prev)
-      const next = [...prevSet]
-      for (const t of treeTickers) {
-        if (!prevSet.has(t)) next.push(t)
-      }
-      return next
-    })
-  }, [tree?.root?.id])
+  const treeTickers = tree ? collectTickers(tree.root) : []
 
   const validateFn = (v: string) => {
     if (!v.trim()) return ''
@@ -157,8 +146,9 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
       <div style={{ fontWeight: 700, marginBottom: 8 }}>Run Backtest</div>
       <label style={S.label}>Tickers</label>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
-        {availableTickers.length === 0 && <span style={{ fontSize: 12, color: '#8b949e' }}>Nessun ticker — vai su Ticker Catalog per fetchare dati</span>}
-        {availableTickers.map((sym) => (
+        {treeTickers.length === 0 && <span style={{ fontSize: 12, color: '#8b949e' }}>Nessun ticker nella strategia — aggiungi Security alla tree</span>}
+        {treeTickers.length > 0 && availableTickers.filter((sym) => treeTickers.includes(sym)).length === 0 && <span style={{ fontSize: 12, color: '#8b949e' }}>Nessun dato disponibile per i ticker della strategia</span>}
+        {availableTickers.filter((sym) => treeTickers.includes(sym)).map((sym) => (
           <button
             key={sym}
             type="button"
