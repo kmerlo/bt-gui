@@ -55,7 +55,7 @@ export default function DataDetailView() {
   const currentTicker = tickers.find((t) => t.symbol === selectedSymbol)
 
   useEffect(() => {
-    priceDataApi.list({ limit: 1000 }).then(setTickers).catch((e: unknown) => setPriceMsg(String(e)))
+    priceDataApi.list().then(setTickers).catch((e: unknown) => setPriceMsg(String(e)))
     dataApi.listIndicators().then(setIndicators).catch((e: unknown) => setIndMsg(String(e)))
   }, [])
 

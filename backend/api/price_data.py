@@ -31,8 +31,8 @@ def list_price_data(
     from backend.database import get_price_source
 
     if get_price_source() == "market":
-        all_tickers = list_price_tickers()
-        return all_tickers[offset : offset + limit]
+        # ponytail: market.db has ~262 tickers; return all without pagination
+        return list_price_tickers()
     # local path — original behaviour
     from backend.database import PriceData as DBPriceData
 

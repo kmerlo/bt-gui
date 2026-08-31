@@ -53,7 +53,7 @@ export default function DataManager() {
   const [adapter, setAdapter] = useState<'ffn' | 'yfinance'>(loadSettings().data_adapter)
 
   const refresh = useCallback(() => {
-    priceDataApi.list({ limit: 1000 }).then(setTickers).catch((e: unknown) => setMsg(String(e)))
+    priceDataApi.list().then(setTickers).catch((e: unknown) => setMsg(String(e)))
   }, [])
 
   useEffect(() => { setAdapter(loadSettings().data_adapter) }, [])
