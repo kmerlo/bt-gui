@@ -21,7 +21,20 @@ export default function App() {
 
   const refreshDb = () => dbApi.info().then(setDbInfo).catch(() => {})
   useEffect(() => { refreshDb() }, [])
-  useEffect(() => { refreshDb() }, [view])
+
+  // sync hash ↔ view (read on mount, write on change)
+  useEffect(() => {
+    const h = window.location.hash.replace(/^#/, '') as View | ''
+    if (
+      h === 'builder' || h === 'results' || h === 'strategies' ||
+      h === 'data' || h === 'indicators' || h === 'signals' || h === 'settings'
+    ) {
+      setView(h)
+    }
+  }, [])
+  useEffect(() => {
+    window.location.hash = view
+  }, [view])
 
   // listen for View button clicks from IndicatorsView / SignalsView
   useEffect(() => {
@@ -118,6 +131,10 @@ export default function App() {
           <button
             key={id}
             onClick={() => setView(id)}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              window.open(`${window.location.pathname}#${id}`, '_blank')
+            }}
             style={{
               fontWeight: view === id ? '700' : '400',
               background: view === id ? '#21262d' : 'transparent',
