@@ -17,11 +17,11 @@ const S = {
   input: { background: '#0d1117', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, padding: '6px 8px', minWidth: 180 },
   btn: { background: '#21262d', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, padding: '6px 10px', cursor: 'pointer' },
   btnPri: { background: '#238636', color: '#fff', border: '1px solid #30363d', borderRadius: 6, padding: '6px 10px', cursor: 'pointer' },
-  layout: { display: 'grid', gridTemplateColumns: '180px 1fr', gap: 12, alignItems: 'flex-start' },
-  panelRight: { display: 'flex', flexDirection: 'column' as const, gap: 12 },
-  palette: { width: 180, minWidth: 180, border: '1px solid #30363d', borderRadius: 8, background: '#0d1117', padding: 10, display: 'flex', flexDirection: 'column' as const, gap: 8 },
+  row: { display: 'flex', gap: 12, alignItems: 'flex-start' },
+  palette: { width: 180, minWidth: 180, border: '1px solid #30363d', borderRadius: 8, background: '#0d1117', padding: 10, display: 'flex', flexDirection: 'column' as const, gap: 8, flexShrink: 0 },
   card: { border: '1px solid #30363d', borderRadius: 6, background: '#161b22', padding: '8px 10px', cursor: 'grab', fontSize: 13, color: '#c9d1d9' },
   msg: { fontSize: 12, color: '#8b949e' },
+  runDialogCol: { width: 340, minWidth: 340, flexShrink: 0 },
 }
 
 function PaletteCard({ type }: { type: NodeType }) {
@@ -76,8 +76,8 @@ export default function BuilderView({ onRunCreated }: { onRunCreated?: (id: numb
         {msg && <span style={S.msg}>{msg}</span>}
       </div>
       <DndContext collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-        <div style={S.layout}>
-          {/* Riga 1: Palette | Canvas */}
+        {/* Riga 1: Palette | Canvas (flex:1) | RunDialog (340px fisso) */}
+        <div style={S.row}>
           {showPalette && (
             <div style={S.palette}>
               <div style={{ fontSize: 12, color: '#8b949e', fontWeight: 700 }}>Palette</div>
@@ -85,18 +85,21 @@ export default function BuilderView({ onRunCreated }: { onRunCreated?: (id: numb
               {NODE_TYPES.map((t) => (<PaletteCard key={t} type={t as NodeType} />))}
             </div>
           )}
-          <TreeEditor />
-
-          {/* Riga 2: Inspector | Indicators + Signals */}
-          <NodeInspector />
-          <div style={S.panelRight}>
-            {showIndicators && <IndicatorPanel />}
-            {showSignals && <SignalPanel />}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <TreeEditor />
           </div>
-
-          {/* Riga 3: Run Backtest */}
-          <RunDialog onRunCreated={onRunCreated} />
+          <div style={S.runDialogCol}>
+            <RunDialog onRunCreated={onRunCreated} />
+          </div>
         </div>
+
+        {/* Riga 2: Inspector (260px) | Indicators (260px) | Signals (300px) */}
+        <div style={S.row}>
+          <NodeInspector />
+          {showIndicators && <IndicatorPanel />}
+          {showSignals && <SignalPanel />}
+        </div>
+
         <DragOverlay>{activeType ? <div style={{ ...S.card, opacity: 0.9 }}>{activeType}</div> : null}</DragOverlay>
       </DndContext>
     </div>
