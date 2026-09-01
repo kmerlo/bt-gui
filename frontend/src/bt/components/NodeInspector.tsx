@@ -15,6 +15,8 @@ const S = {
     flexDirection: 'column' as const,
     gap: 10,
     overflowY: 'auto' as const,
+    overflowX: 'hidden' as const,
+    boxSizing: 'border-box' as const,
     maxHeight: 'calc(100vh - 100px)',
   },
   title: { fontSize: 13, fontWeight: 700, color: '#c9d1d9' },
