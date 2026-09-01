@@ -31,12 +31,26 @@ export default function App() {
         h === 'data' || h === 'indicators' || h === 'signals' || h === 'settings'
       ) {
         setView(h)
+      } else if (h === 'data-detail') {
+        const p = new URLSearchParams(new URL(`http://x${window.location.hash}`).search).get('symbol')
+        setDetailPriceSymbol(p ?? null)
+        setDetailType('price')
+        setView('data-detail')
       }
     }
     applyHash()
     window.addEventListener('hashchange', applyHash)
     return () => window.removeEventListener('hashchange', applyHash)
   }, [])
+  useEffect(() => {
+    if (view === 'data-detail' && detailPriceSymbol) {
+      window.location.hash = `data-detail?symbol=${encodeURIComponent(detailPriceSymbol)}`
+    } else if (view !== 'data-detail' && view !== 'builder') {
+      // data-detail with no symbol, or builder — no hash needed (default)
+    } else {
+      window.location.hash = view
+    }
+  }, [view, detailPriceSymbol])
 
   // listen for View button clicks from IndicatorsView / SignalsView
   useEffect(() => {
@@ -57,6 +71,7 @@ export default function App() {
       setDetailPriceSymbol(symbol)
       setDetailType('price')
       setView('data-detail')
+      window.location.hash = `data-detail?symbol=${encodeURIComponent(symbol)}`
     }
     window.addEventListener('bt-navigate-indicator', onIndicator)
     window.addEventListener('bt-navigate-signal', onSignal)

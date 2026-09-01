@@ -182,6 +182,9 @@ export default function DataManager({ onNavigate }: { onNavigate?: (symbol: stri
                       <button type="button" style={S.btnView} onClick={() => {
                         if (onNavigate) onNavigate(t.symbol)
                         else window.dispatchEvent(new CustomEvent('bt-navigate-price', { detail: t.symbol }))
+                      }} onContextMenu={(e) => {
+                        e.preventDefault()
+                        window.open(`${window.location.pathname}#data-detail?symbol=${encodeURIComponent(t.symbol)}`, '_blank')
                       }}>View</button>
                     </td>
                     <td style={{ ...S.td, textAlign: 'center' as const }}>
