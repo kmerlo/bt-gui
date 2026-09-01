@@ -47,10 +47,8 @@ export default function NodeInspector() {
   const removeNode = useBtStore((s) => s.removeNode)
   const tickerStart = useBtStore((s) => s.tickerStart)
   const tickerEnd = useBtStore((s) => s.tickerEnd)
-  const priceColumn = useBtStore((s) => s.priceColumn)
   const setTickerStart = useBtStore((s) => s.setTickerStart)
   const setTickerEnd = useBtStore((s) => s.setTickerEnd)
-  const setPriceColumn = useBtStore((s) => s.setPriceColumn)
 
   const node = tree && selectedId ? findNode(tree.root, selectedId) : null
 
@@ -196,11 +194,6 @@ export default function NodeInspector() {
                   <DateInputIT value={tickerEnd ?? ''} onChange={setTickerEnd} style={S.input} />
                 </div>
               </div>
-              <div style={S.label}>Price column</div>
-              <select value={priceColumn} onChange={(e) => setPriceColumn(e.target.value as 'close' | 'adj_close')} style={S.select}>
-                <option value="close">Close</option>
-                <option value="adj_close">Adj Close</option>
-              </select>
             </>
           )}
         </>

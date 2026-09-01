@@ -216,13 +216,6 @@ export default function SettingsView() {
           <span style={S.label}>Integer positions</span>
           <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}><input type="checkbox" checked={settings.integer_positions} onChange={(e) => setSettings({ ...settings, integer_positions: e.target.checked })} /> abilita</label>
         </div>
-        <div style={S.row}>
-          <span style={S.label}>Price column default</span>
-          <select style={S.input} value={settings.price_column} onChange={(e) => setSettings({ ...settings, price_column: e.target.value as 'close' | 'adj_close' })}>
-            <option value="adj_close">Adj Close</option>
-            <option value="close">Close</option>
-          </select>
-        </div>
         <div style={{ marginBottom: 8 }}>
           <div style={S.label}>Commission simple_fn</div>
           <textarea style={S.textarea} rows={2} placeholder="lambda q,p: max(1, abs(q)*0.01)" value={settings.simple_fn} onChange={(e) => setSettings({ ...settings, simple_fn: e.target.value })} />
@@ -251,6 +244,22 @@ export default function SettingsView() {
             <option value="it">Italiano</option>
             <option value="en">English</option>
           </select>
+        </div>
+      </div>
+
+      {/* Sorgente dati */}
+      <div style={S.card}>
+        <div style={S.h}>Sorgente dati</div>
+        <div style={S.row}>
+          <span style={S.label}>Price column</span>
+          <select style={S.input} value={settings.price_column} onChange={(e) => {
+            const v = e.target.value as 'close' | 'adj_close'
+            setSettings({ ...settings, price_column: v })
+          }}>
+            <option value="adj_close">Adj Close</option>
+            <option value="close">Close</option>
+          </select>
+          <span style={{ fontSize: 11, color: '#8b949e' }}>globale, influenza tutti i calcoli</span>
         </div>
       </div>
 

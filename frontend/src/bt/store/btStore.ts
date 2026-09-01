@@ -3,6 +3,7 @@ import type { StrategyTree, NodeConfig } from '../../types/bt'
 import { loadStoredPreset, saveStoredPreset, defaultPreset } from './preset'
 import type { BuilderBacktestConfig } from './preset'
 import { findNode, updateNodeRec, addChildRec, removeRec, insertAtRec } from './treeOps'
+import { loadSettings } from '../../api/settings'
 
 function uid(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -22,7 +23,6 @@ export type BtStore = {
   showPalette: boolean
   tickerStart: string | null
   tickerEnd: string | null
-  priceColumn: 'close' | 'adj_close'
   extraSourceIds: Record<string, number>
   indicatorSourceIds: number[]
   backtestConfig: BuilderBacktestConfig
@@ -35,7 +35,6 @@ export type BtStore = {
   togglePalette: () => void
   setTickerStart: (v: string) => void
   setTickerEnd: (v: string) => void
-  setPriceColumn: (v: 'close' | 'adj_close') => void
   setExtraSourceIds: (m: Record<string, number>) => void
   setIndicatorSourceIds: (ids: number[]) => void
   setBacktestConfig: (c: Partial<BuilderBacktestConfig>) => void
@@ -54,7 +53,6 @@ function persist(get: () => BtStore): void {
     saveStoredPreset({
     tickerStart: s.tickerStart,
     tickerEnd: s.tickerEnd,
-    priceColumn: s.priceColumn,
     extraSourceIds: s.extraSourceIds,
     indicatorSourceIds: s.indicatorSourceIds,
     backtestConfig: s.backtestConfig,
@@ -75,7 +73,6 @@ export const useBtStore = create<BtStore>((set, get) => ({
   showPalette: _init.showPalette ?? true,
   tickerStart: _init.tickerStart,
   tickerEnd: _init.tickerEnd,
-  priceColumn: _init.priceColumn,
   extraSourceIds: _init.extraSourceIds,
   indicatorSourceIds: _init.indicatorSourceIds,
   backtestConfig: _init.backtestConfig,
@@ -84,7 +81,6 @@ export const useBtStore = create<BtStore>((set, get) => ({
     if (raw && typeof raw === 'object') {
       const tickerStart = (raw.ticker_start as string | null) ?? _init.tickerStart
       const tickerEnd = (raw.ticker_end as string | null) ?? _init.tickerEnd
-      const priceColumn = (raw.price_column as 'close' | 'adj_close') ?? _init.priceColumn
       const extraSourceIds = (raw.extra_source_ids as Record<string, number>) ?? {}
       const indicatorSourceIds = (raw.indicator_source_ids as number[]) ?? []
       const cfg = (raw.config as Record<string, unknown>) ?? {}
@@ -95,14 +91,13 @@ export const useBtStore = create<BtStore>((set, get) => ({
         simple_fn: (commission.simple_fn as string) ?? get().backtestConfig.simple_fn ?? '',
         start: (cfg.start as string | null) ?? tickerStart,
         end: (cfg.end as string | null) ?? tickerEnd,
-        price_column: (cfg.price_column as 'close' | 'adj_close') ?? priceColumn,
+        price_column: (cfg.price_column as 'close' | 'adj_close') ?? loadSettings().price_column,
       }
       const selectedId = (raw.selected_node_id as string | null) ?? null
       const next: Partial<BtStore> = {
         tree,
         tickerStart,
         tickerEnd,
-        priceColumn,
         extraSourceIds,
         indicatorSourceIds,
         backtestConfig,
@@ -148,10 +143,6 @@ export const useBtStore = create<BtStore>((set, get) => ({
   },
   setTickerEnd: (tickerEnd) => {
     set({ tickerEnd })
-    persist(get)
-  },
-  setPriceColumn: (priceColumn) => {
-    set({ priceColumn })
     persist(get)
   },
   setExtraSourceIds: (extraSourceIds) => {

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { backtestApi, priceDataApi } from '../../api/bt'
+import { loadSettings } from '../../api/settings'
 import { useBtStore } from '../store/btStore'
-import type { NodeConfig } from '../../types/bt'
+import { collectTickers } from '../utils/collectTickers'
 import DateInputIT from './DateInputIT'
 
 const S = {
@@ -13,27 +14,12 @@ const S = {
   label: { fontSize: 12, color: '#8b949e', marginBottom: 4, display: 'block' } as const,
 }
 
-function collectTickers(node: NodeConfig): string[] {
-  const tickers: string[] = []
-  const walk = (n: NodeConfig) => {
-    if (n.type === 'Security' || n.type === 'HedgeSecurity' || n.type === 'CouponPayingSecurity') {
-      const t = n.name.trim().toUpperCase()
-      if (t && t !== 'NEW_TICKER') tickers.push(t)
-    }
-    for (const c of n.children) walk(c)
-  }
-  walk(node)
-  return tickers
-}
-
 export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number) => void }) {
   const tree = useBtStore((s) => s.tree)
   const tickerStart = useBtStore((s) => s.tickerStart)
   const tickerEnd = useBtStore((s) => s.tickerEnd)
-  const priceColumn = useBtStore((s) => s.priceColumn)
   const setTickerStart = useBtStore((s) => s.setTickerStart)
   const setTickerEnd = useBtStore((s) => s.setTickerEnd)
-  const setPriceColumn = useBtStore((s) => s.setPriceColumn)
   const backtestConfig = useBtStore((s) => s.backtestConfig)
   const setBacktestConfig = useBtStore((s) => s.setBacktestConfig)
   const extraSourceIds = useBtStore((s) => s.extraSourceIds)
@@ -41,6 +27,7 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
   const setIndicatorSourceIds = useBtStore((s) => s.setIndicatorSourceIds)
   const [availableTickers, setAvailableTickers] = useState<string[]>([])
   const [selectedTickers, setSelectedTickers] = useState<string[]>([])
+  const initDone = useRef(false)
   const [msg, setMsg] = useState('')
   const [progress, setProgress] = useState(0)
   const [running, setRunning] = useState(false)
@@ -55,6 +42,19 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
   useEffect(() => {
     priceDataApi.list().then((rows) => setAvailableTickers(rows.map((r) => r.symbol))).catch(() => { /* ignore */ })
   }, [])
+
+  // Auto-select all tree tickers that have data available — runs exactly once per tree
+  useEffect(() => {
+    initDone.current = false
+  }, [tree])
+  useEffect(() => {
+    const ids = tree ? collectTickers(tree.root) : []
+    const known = ids.filter((t) => availableTickers.includes(t))
+    if (!initDone.current && known.length > 0) {
+      initDone.current = true
+      setSelectedTickers(known)
+    }
+  }, [availableTickers, tree])
 
   useEffect(() => {
     const id = runId
@@ -125,7 +125,7 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
       commission: { type: 'simple', simple_fn: simpleFn || null },
       start: tickerStart,
       end: tickerEnd,
-      price_column: priceColumn,
+      price_column: loadSettings().price_column,
     }
     const referencedIds = (() => {
       const ids = new Set<number>(indicatorSourceIds)
@@ -199,11 +199,6 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
       <DateInputIT value={tickerStart ?? ''} onChange={setTickerStart} style={S.input} />
       <label style={{ ...S.label, marginTop: 8 }}>End date</label>
       <DateInputIT value={tickerEnd ?? ''} onChange={setTickerEnd} style={S.input} />
-      <label style={{ ...S.label, marginTop: 8 }}>Price column</label>
-      <select value={priceColumn} onChange={(e) => setPriceColumn(e.target.value as 'close' | 'adj_close')} style={S.select}>
-        <option value="close">Close</option>
-        <option value="adj_close">Adj Close</option>
-      </select>
       <label style={{ ...S.label, marginTop: 8 }}>Initial capital</label>
       <input style={S.input} type="number" value={capital} onChange={(e) => setBacktestConfig({ initial_capital: Number(e.target.value) })} />
       <label style={{ ...S.label, marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>

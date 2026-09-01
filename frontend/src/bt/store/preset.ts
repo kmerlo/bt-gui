@@ -1,5 +1,5 @@
 import type { StrategyTree } from '../../types/bt'
-import { loadSettings } from '../../api/bt'
+import { loadSettings } from '../../api/settings'
 import type { BtStore } from './btStore'
 
 export const BUILDER_PRESET_KEY = 'bt-builder-preset:v1'
@@ -16,7 +16,6 @@ export type BuilderBacktestConfig = {
 export type StoredPreset = {
   tickerStart: string | null
   tickerEnd: string | null
-  priceColumn: 'close' | 'adj_close'
   extraSourceIds: Record<string, number>
   indicatorSourceIds: number[]
   backtestConfig: BuilderBacktestConfig
@@ -45,7 +44,6 @@ export function loadStoredPreset(): StoredPreset | null {
     return {
       tickerStart: (p.tickerStart as string | null) ?? getOneYearAgo(),
       tickerEnd: (p.tickerEnd as string | null) ?? getToday(),
-      priceColumn: (p.priceColumn as 'close' | 'adj_close') ?? loadSettings().price_column,
       extraSourceIds: (p.extraSourceIds as Record<string, number>) ?? {},
       indicatorSourceIds: (p.indicatorSourceIds as number[]) ?? [],
       backtestConfig: p.backtestConfig ?? {
@@ -78,7 +76,6 @@ export function defaultPreset(): StoredPreset {
   return {
     tickerStart: getOneYearAgo(),
     tickerEnd: getToday(),
-    priceColumn: 'close',
     extraSourceIds: {},
     indicatorSourceIds: [],
     backtestConfig: {
@@ -102,7 +99,6 @@ export function buildPresetForTree(get: () => BtStore): Record<string, unknown> 
   return {
     ticker_start: s.tickerStart,
     ticker_end: s.tickerEnd,
-    price_column: s.priceColumn,
     extra_source_ids: s.extraSourceIds,
     indicator_source_ids: s.indicatorSourceIds,
     config: {
@@ -111,7 +107,6 @@ export function buildPresetForTree(get: () => BtStore): Record<string, unknown> 
       commission: { type: 'simple', simple_fn: s.backtestConfig.simple_fn || null },
       start: s.backtestConfig.start,
       end: s.backtestConfig.end,
-      price_column: s.backtestConfig.price_column,
     },
     selected_node_id: s.selectedId,
   }
