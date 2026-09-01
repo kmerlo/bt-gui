@@ -5,8 +5,8 @@ import DateInputIT from './DateInputIT'
 
 const S = {
   wrap: {
-    width: 420,
-    minWidth: 420,
+    width: 320,
+    minWidth: 320,
     border: '1px solid #30363d',
     borderRadius: 8,
     background: '#0d1117',
@@ -19,7 +19,7 @@ const S = {
   },
   title: { fontSize: 13, fontWeight: 700, color: '#c9d1d9' },
   label: { fontSize: 12, color: '#8b949e' },
-  input: { background: '#161b22', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, padding: '6px 8px', width: '100%' },
+  input: { background: '#161b22', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, padding: '6px 8px', width: '100%', wordBreak: 'break-all' as const },
   select: { background: '#161b22', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, padding: '6px 8px', width: '100%' },
   textarea: {
     background: '#161b22',
@@ -28,6 +28,8 @@ const S = {
     borderRadius: 6,
     padding: '6px 8px',
     width: '100%',
+    wordBreak: 'break-all' as const,
+    overflowX: 'hidden' as const,
     minHeight: 80,
     fontFamily: 'monospace',
     fontSize: 12,
