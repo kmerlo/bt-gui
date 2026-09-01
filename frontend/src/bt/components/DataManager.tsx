@@ -39,7 +39,7 @@ const S = {
 
 const ROW_COLS = ['date', 'open', 'high', 'low', 'close', 'adj_close', 'volume'] as const
 
-export default function DataManager() {
+export default function DataManager({ onNavigate }: { onNavigate?: (symbol: string) => void }) {
   const [tickers, setTickers] = useState<PriceTickerRow[]>([])
   const [symbolInput, setSymbolInput] = useState('')
   const [start, setStart] = useState('')
@@ -48,7 +48,6 @@ export default function DataManager() {
   const [filters, setFilters] = useState<FilterState>({})
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [rowCache, setRowCache] = useState<Record<string, { date: string; open: number | null; high: number | null; low: number | null; close: number | null; adj_close: number | null; volume: number | null }[]>>({})
-  const [fetching, setFetching] = useState<Set<string>>(new Set())
   const [msg, setMsg] = useState('')
   const [adapter, setAdapter] = useState<'ffn' | 'yfinance'>(loadSettings().data_adapter)
 
@@ -65,7 +64,6 @@ export default function DataManager() {
     const symbols = raw.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
     if (symbols.length === 0) { setMsg('ticker required (e.g. AAPL)'); return }
 
-    setFetching((s) => new Set(s).add('__batch__'))
     setMsg('')
     const results: string[] = []
     for (const sym of symbols) {
@@ -80,7 +78,6 @@ export default function DataManager() {
     setMsg(results.join('\n'))
     setSymbolInput('')
     refresh()
-    setFetching((s) => { const n = new Set(s); n.delete('__batch__'); return n })
   }
 
   const handleDelete = async (symbol: string) => {
@@ -97,27 +94,7 @@ export default function DataManager() {
     }
   }
 
-  const fetchRows = useCallback(async (symbol: string) => {
-    const res = await fetch(`/api/bt/price-data/${encodeURIComponent(symbol)}${new URLSearchParams({ limit: '500' }).toString()}`)
-    return res.json() as Promise<Array<{ date: string; open: number | null; high: number | null; low: number | null; close: number | null; adj_close: number | null; volume: number | null }>>
-  }, [])
 
-  const toggleExpand = async (symbol: string) => {
-    if (expanded.has(symbol)) {
-      setExpanded((s) => { const n = new Set(s); n.delete(symbol); return n })
-      return
-    }
-    setFetching((s) => new Set(s).add(symbol))
-    try {
-      const rows = await fetchRows(symbol)
-      setRowCache((c) => ({ ...c, [symbol]: rows }))
-      setExpanded((s) => new Set(s).add(symbol))
-    } catch (e) {
-      setMsg(`[err] ${String(e)}`)
-    } finally {
-      setFetching((s) => { const n = new Set(s); n.delete(symbol); return n })
-    }
-  }
 
   const handleSort = (key: string) => {
     setSort((prev) => ({
@@ -158,9 +135,7 @@ export default function DataManager() {
         />
         <DateInputIT style={S.input} value={start} onChange={setStart} placeholder="start_date" tooltip={formatDate(start) || 'gg/mm/aaaa'} />
         <DateInputIT style={S.input} value={end} onChange={setEnd} placeholder="end_date" tooltip={formatDate(end) || 'gg/mm/aaaa'} />
-        <button type="button" style={fetching.has('__batch__') ? { ...S.btn, opacity: 0.5 } : S.btnPri} onClick={handleFetch} disabled={fetching.has('__batch__')}>
-          {fetching.has('__batch__') ? 'Fetching…' : 'Fetch'}
-        </button>
+        <button type="button" style={S.btnPri} onClick={handleFetch}>Fetch</button>
       </div>
       {msg && <div style={msg.startsWith('[ok]') ? S.msgOk : S.msgErr}>{msg}</div>}
       <div style={{ overflow: 'auto', maxHeight: '70vh', border: '1px solid #30363d', borderRadius: 6 }}>
@@ -204,9 +179,10 @@ export default function DataManager() {
                     <td style={S.td}>{formatDate(t.end)}</td>
                     <td style={S.td}>{t.count}</td>
                     <td style={{ ...S.td, textAlign: 'center' as const }}>
-                      <button type="button" style={isExpanded ? S.btnViewHide : S.btnView} onClick={() => toggleExpand(t.symbol)}>
-                        {isExpanded ? 'Hide' : 'View'}
-                      </button>
+                      <button type="button" style={S.btnView} onClick={() => {
+                        if (onNavigate) onNavigate(t.symbol)
+                        else window.dispatchEvent(new CustomEvent('bt-navigate-price', { detail: t.symbol }))
+                      }}>View</button>
                     </td>
                     <td style={{ ...S.td, textAlign: 'center' as const }}>
                       <button type="button" style={S.btnDanger} onClick={() => handleDelete(t.symbol)}>Delete</button>

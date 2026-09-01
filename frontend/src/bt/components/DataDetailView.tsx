@@ -26,7 +26,7 @@ type TableResp = { columns: string[]; rows: Record<string, unknown>[]; total: nu
 
 interface Props {
   selectedId: number | null
-  selectedType: 'indicator' | 'signal' | null
+  selectedType: 'indicator' | 'signal' | 'price' | null
   onBack: () => void
 }
 
@@ -84,9 +84,15 @@ export default function DataDetailView({ selectedId, selectedType, onBack }: Pro
     if (selectedType === 'indicator' && selectedId !== null) {
       setSelectedIndicatorId(selectedId)
       setSelectedSignalId(null)
+      setSelectedSymbol('')
     } else if (selectedType === 'signal' && selectedId !== null) {
       setSelectedSignalId(selectedId)
       setSelectedIndicatorId(null)
+      setSelectedSymbol('')
+    } else if (selectedType === 'price' && selectedId !== null) {
+      setSelectedSymbol(String(selectedId))
+      setSelectedIndicatorId(null)
+      setSelectedSignalId(null)
     }
   }, [selectedId, selectedType])
 
@@ -145,6 +151,7 @@ export default function DataDetailView({ selectedId, selectedType, onBack }: Pro
         <button type="button" style={S.btn} onClick={onBack}>← Indietro</button>
         {selectedType === 'indicator' && <span style={S.header}>Indicator # {selectedId}</span>}
         {selectedType === 'signal' && <span style={S.header}>Signal # {selectedId}</span>}
+        {selectedType === 'price' && <span style={S.header}>Price Data — {selectedId}</span>}
       </div>
 
       {/* ── Price Data Section ── */}

@@ -16,7 +16,7 @@ export default function App() {
   const [runId, setRunId] = useState<number | null>(null)
   const [dbInfo, setDbInfo] = useState<DbInfo | null>(null)
   const [detailId, setDetailId] = useState<number | null>(null)
-  const [detailType, setDetailType] = useState<'indicator' | 'signal' | null>(null)
+  const [detailType, setDetailType] = useState<'indicator' | 'signal' | 'price' | null>(null)
 
   const refreshDb = () => dbApi.info().then(setDbInfo).catch(() => {})
   useEffect(() => { refreshDb() }, [])
@@ -36,11 +36,19 @@ export default function App() {
       setDetailType('signal')
       setView('data-detail')
     }
+    const onPrice = (e: Event) => {
+      const symbol = (e as CustomEvent).detail as string
+      setDetailId(Number.parseInt(symbol, 10) || 0)
+      setDetailType('price')
+      setView('data-detail')
+    }
     window.addEventListener('bt-navigate-indicator', onIndicator)
     window.addEventListener('bt-navigate-signal', onSignal)
+    window.addEventListener('bt-navigate-price', onPrice)
     return () => {
       window.removeEventListener('bt-navigate-indicator', onIndicator)
       window.removeEventListener('bt-navigate-signal', onSignal)
+      window.removeEventListener('bt-navigate-price', onPrice)
     }
   }, [])
 
@@ -126,7 +134,7 @@ export default function App() {
       </nav>
       {view === 'builder' && <BuilderView onRunCreated={handleRunCreated} />}
       {view === 'results' && <ResultsDashboard runId={runId} />}
-      {view === 'data' && <DataManager />}
+      {view === 'data' && <DataManager onNavigate={(symbol) => window.dispatchEvent(new CustomEvent('bt-navigate-price', { detail: symbol }))} />}
       {view === 'indicators' && <IndicatorsView />}
       {view === 'signals' && <SignalsView />}
       {view === 'data-detail' && <DataDetailView selectedId={detailId} selectedType={detailType} onBack={() => setView('indicators')} />}

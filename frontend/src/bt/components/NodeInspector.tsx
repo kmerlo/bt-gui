@@ -121,7 +121,7 @@ export default function NodeInspector() {
         <span style={S.label}>id {(node.id ?? '').slice(0, 8)}</span>
       </div>
 
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ overflowX: 'hidden' }}>
         <span style={S.label}>name {node.type === 'Security' ? '(ticker = name)' : ''}</span>
         <input
           value={nameDraft}
@@ -132,11 +132,11 @@ export default function NodeInspector() {
           }}
           style={S.input}
         />
-      </label>
+      </div>
 
       <div style={S.label}>type — cambio tipo non consentito v1 (ricrea il nodo)</div>
 
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ overflowX: 'hidden' }}>
         <span style={S.label}>params (JSON)</span>
         <textarea
           value={paramsDraft}
@@ -156,7 +156,7 @@ export default function NodeInspector() {
           style={S.textarea}
         />
         {paramsErr && <span style={{ color: '#f85149', fontSize: 12 }}>{paramsErr}</span>}
-      </label>
+      </div>
 
       {!isStrategy && (
         <div style={{ background: '#1f2937', border: '1px solid #30363d', borderRadius: 6, padding: '8px 10px', fontSize: 12, color: '#8b949e', lineHeight: 1.5 }}>
