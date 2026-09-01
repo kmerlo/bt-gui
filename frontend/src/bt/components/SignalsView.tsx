@@ -138,6 +138,9 @@ export default function SignalsView() {
                 <td style={{ ...S.td, display: 'flex', gap: 4 }}>
                   <button type="button" style={S.btnView} onClick={() => {
                     window.dispatchEvent(new CustomEvent('bt-navigate-signal', { detail: sig.id }))
+                  }} onContextMenu={(e) => {
+                    e.preventDefault()
+                    window.open(`${window.location.pathname}#data-detail?signal=${sig.id}`, '_blank')
                   }}>View</button>
                   <button type="button" style={S.btnDanger} onClick={() => handleDelete(sig.id)}>Delete</button>
                 </td>

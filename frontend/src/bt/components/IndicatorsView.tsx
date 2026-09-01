@@ -142,6 +142,9 @@ export default function IndicatorsView() {
                 <td style={{ ...S.td, display: 'flex', gap: 4 }}>
                   <button type="button" style={S.btnView} onClick={() => {
                     window.dispatchEvent(new CustomEvent('bt-navigate-indicator', { detail: ind.id }))
+                  }} onContextMenu={(e) => {
+                    e.preventDefault()
+                    window.open(`${window.location.pathname}#data-detail?indicator=${ind.id}`, '_blank')
                   }}>View</button>
                   <button type="button" style={S.btnDanger} onClick={() => handleDelete(ind.id)}>Delete</button>
                 </td>

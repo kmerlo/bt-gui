@@ -22,35 +22,42 @@ export default function App() {
   const refreshDb = () => dbApi.info().then(setDbInfo).catch(() => {})
   useEffect(() => { refreshDb() }, [])
 
-  // sync hash ↔ view (mount + hashchange for back/forward + anchor clicks)
+  // read view + detail params from hash on mount and hashchange
   useEffect(() => {
     const applyHash = () => {
-      const h = window.location.hash.replace(/^#/, '') as View | ''
+      const raw = window.location.hash.replace(/^#/, '')
+      // parse path + query (e.g. "data-detail?symbol=AAPL")
+      const [path, qs] = raw.split('?')
+      const params = new URLSearchParams(qs ?? '')
+
       if (
-        h === 'builder' || h === 'results' || h === 'strategies' ||
-        h === 'data' || h === 'indicators' || h === 'signals' || h === 'settings'
+        path === 'builder' || path === 'results' || path === 'strategies' ||
+        path === 'data' || path === 'indicators' || path === 'signals' || path === 'settings'
       ) {
-        setView(h)
-      } else if (h === 'data-detail') {
-        const p = new URLSearchParams(new URL(`http://x${window.location.hash}`).search).get('symbol')
-        setDetailPriceSymbol(p ?? null)
-        setDetailType('price')
+        setView(path as View)
+      } else if (path === 'data-detail') {
+        const symbol = params.get('symbol')
+        const indId = params.get('indicator') ? Number(params.get('indicator')) : null
+        const sigId = params.get('signal') ? Number(params.get('signal')) : null
+        if (symbol !== null) {
+          setDetailPriceSymbol(symbol)
+          setDetailType('price')
+        } else if (indId !== null) {
+          setDetailId(indId)
+          setDetailType('indicator')
+        } else if (sigId !== null) {
+          setDetailId(sigId)
+          setDetailType('signal')
+        }
         setView('data-detail')
+      } else {
+        setView('builder')
       }
     }
     applyHash()
     window.addEventListener('hashchange', applyHash)
     return () => window.removeEventListener('hashchange', applyHash)
   }, [])
-  useEffect(() => {
-    if (view === 'data-detail' && detailPriceSymbol) {
-      window.location.hash = `data-detail?symbol=${encodeURIComponent(detailPriceSymbol)}`
-    } else if (view !== 'data-detail' && view !== 'builder') {
-      // data-detail with no symbol, or builder — no hash needed (default)
-    } else {
-      window.location.hash = view
-    }
-  }, [view, detailPriceSymbol])
 
   // listen for View button clicks from IndicatorsView / SignalsView
   useEffect(() => {
@@ -59,12 +66,14 @@ export default function App() {
       setDetailId(id)
       setDetailType('indicator')
       setView('data-detail')
+      window.location.hash = `data-detail?indicator=${id}`
     }
     const onSignal = (e: Event) => {
       const id = (e as CustomEvent).detail as number
       setDetailId(id)
       setDetailType('signal')
       setView('data-detail')
+      window.location.hash = `data-detail?signal=${id}`
     }
     const onPrice = (e: Event) => {
       const symbol = (e as CustomEvent).detail as string
