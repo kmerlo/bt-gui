@@ -16,6 +16,7 @@ export default function App() {
   const [runId, setRunId] = useState<number | null>(null)
   const [dbInfo, setDbInfo] = useState<DbInfo | null>(null)
   const [detailId, setDetailId] = useState<number | null>(null)
+  const [detailPriceSymbol, setDetailPriceSymbol] = useState<string | null>(null)
   const [detailType, setDetailType] = useState<'indicator' | 'signal' | 'price' | null>(null)
 
   const refreshDb = () => dbApi.info().then(setDbInfo).catch(() => {})
@@ -38,7 +39,7 @@ export default function App() {
     }
     const onPrice = (e: Event) => {
       const symbol = (e as CustomEvent).detail as string
-      setDetailId(Number.parseInt(symbol, 10) || 0)
+      setDetailPriceSymbol(symbol)
       setDetailType('price')
       setView('data-detail')
     }
@@ -137,7 +138,7 @@ export default function App() {
       {view === 'data' && <DataManager onNavigate={(symbol) => window.dispatchEvent(new CustomEvent('bt-navigate-price', { detail: symbol }))} />}
       {view === 'indicators' && <IndicatorsView />}
       {view === 'signals' && <SignalsView />}
-      {view === 'data-detail' && <DataDetailView selectedId={detailId} selectedType={detailType} onBack={() => setView('indicators')} />}
+      {view === 'data-detail' && <DataDetailView selectedId={detailId} selectedType={detailType} priceSymbol={detailPriceSymbol} onBack={() => setView('indicators')} />}
       {view === 'strategies' && <StrategiesView />}
       {view === 'settings' && <SettingsView />}
     </div>

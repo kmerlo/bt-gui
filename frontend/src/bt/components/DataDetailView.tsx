@@ -27,10 +27,11 @@ type TableResp = { columns: string[]; rows: Record<string, unknown>[]; total: nu
 interface Props {
   selectedId: number | null
   selectedType: 'indicator' | 'signal' | 'price' | null
+  priceSymbol: string | null
   onBack: () => void
 }
 
-export default function DataDetailView({ selectedId, selectedType, onBack }: Props) {
+export default function DataDetailView({ selectedId, selectedType, priceSymbol, onBack }: Props) {
   // Price data state
   const [tickers, setTickers] = useState<{ symbol: string; interval: string; start: string; end: string; count: number }[]>([])
   const [selectedSymbol, setSelectedSymbol] = useState<string>('')
@@ -89,8 +90,8 @@ export default function DataDetailView({ selectedId, selectedType, onBack }: Pro
       setSelectedSignalId(selectedId)
       setSelectedIndicatorId(null)
       setSelectedSymbol('')
-    } else if (selectedType === 'price' && selectedId !== null) {
-      setSelectedSymbol(String(selectedId))
+    } else if (selectedType === 'price' && priceSymbol !== null) {
+      setSelectedSymbol(priceSymbol)
       setSelectedIndicatorId(null)
       setSelectedSignalId(null)
     }
