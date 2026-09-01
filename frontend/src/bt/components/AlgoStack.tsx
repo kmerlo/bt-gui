@@ -3,6 +3,7 @@ import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { algosApi, dataApi, type AlgoMeta, type AlgoSchema, type DataSourceRow } from '../../api/bt'
+import Tooltip from './Tooltip'
 import { useBtStore, findNode } from '../store/btStore'
 import type { AlgoConfig } from '../../types/bt'
 
@@ -14,8 +15,10 @@ const S = {
   item: { border: '1px solid #30363d', borderRadius: 8, background: '#161b22', padding: 8, display: 'flex', flexDirection: 'column' as const, gap: 6 },
   warn: { background: '#332a00', border: '1px solid #d29922', color: '#f0c040', borderRadius: 6, padding: '6px 8px', fontSize: 12 },
   input: { background: '#0d1117', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, padding: '4px 6px', width: '100%' },
-  label: { fontSize: 12, color: '#8b949e' },
+  label: { fontSize: 12, color: '#8b949e', cursor: 'help' },
   handle: { cursor: 'grab', padding: '0 4px', color: '#8b949e', userSelect: 'none' as const },
+  algoName: { fontSize: 13, cursor: 'help' },
+  expandBtn: { fontSize: 11, color: '#58a6ff', cursor: 'pointer', background: 'none', border: 'none', padding: 0, lineHeight: 1 },
 }
 
 function AlgoItem({
@@ -25,6 +28,7 @@ function AlgoItem({
   onUpdate,
   indicatorSources,
   signalSources,
+  meta,
 }: {
   algo: AlgoConfig
   idx: number
@@ -32,10 +36,12 @@ function AlgoItem({
   onUpdate: (patch: Record<string, unknown>) => void
   indicatorSources: DataSourceRow[]
   signalSources: DataSourceRow[]
+  meta: AlgoMeta | null
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: `${algo.class_name}-${idx}` })
   const style = { transform: CSS.Transform.toString(transform), transition }
   const [schema, setSchema] = useState<AlgoSchema | null>(null)
+  const [expanded, setExpanded] = useState(false)
   const isSelectWhere = algo.class_name === 'SelectWhere'
 
   useEffect(() => {
@@ -53,49 +59,79 @@ function AlgoItem({
     }
   }, [algo.class_name])
 
+  const docTooltip = meta?.doc ?? ''
+  const docLines = docTooltip.split('\n').filter(Boolean)
+  const firstLine = docLines[0] ?? ''
+  const extraLines = docLines.slice(1).join('\n')
+
   return (
     <div ref={setNodeRef} style={{ ...S.item, ...style }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span style={S.handle} {...attributes} {...listeners}>
           ⋮⋮
         </span>
-        <strong style={{ flex: 1, fontSize: 13 }}>{algo.class_name}</strong>
+        <Tooltip
+          trigger={<strong style={S.algoName}>{algo.class_name}</strong>}
+          content={firstLine ? (
+            <span>
+              {firstLine}
+              {extraLines && (
+                <>
+                  {expanded ? <br /> : '…'}
+                  {expanded ? extraLines : null}
+                </>
+              )}
+              {extraLines && (
+                <button style={S.expandBtn} onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}>
+                  {expanded ? '[chiudi]' : '[espandi]'}
+                </button>
+              )}
+            </span>
+          ) : ''}
+        />
         <button onClick={onRemove} type="button" style={{ background: 'transparent', border: 'none', color: '#f85149', cursor: 'pointer' }}>
           ×
         </button>
       </div>
       {schema && Object.keys(schema.properties).length > 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {Object.entries(schema.properties).map(([k, meta]) => {
+          {Object.entries(schema.properties).map(([k, pmeta]) => {
             const val = (algo.params as Record<string, unknown>)[k]
-            const t = meta.type
+            const t = pmeta.type
+            const paramDesc = meta?.param_docs?.[k]
+            const labelEl = (
+              <Tooltip
+                trigger={<span style={S.label}>{k}</span>}
+                content={paramDesc ?? ''}
+              />
+            )
             // indicator ref → render select with available indicators
-            if ((meta as Record<string, unknown>).kind === 'indicator') {
+            if ((pmeta as Record<string, unknown>).kind === 'indicator') {
               // ponytail: SelectWhere.signal è un indicatore puro, nessuna condizione
-              if (isSelectWhere) {
-                return (
-                  <div key={k} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <span style={S.label}>{k}</span>
-                    <select
-                      value={val as string ?? ''}
-                      onChange={(e) => onUpdate({ [k]: e.target.value || undefined })}
-                      style={S.sel}
-                    >
-                      <option value="">None</option>
-                      {indicatorSources.map((ind) => (
-                        <option key={ind.id} value={String(ind.id)}>
-                          #{ind.id} {ind.name} ({String((ind.meta as Record<string, unknown>)?.indicator_type ?? '?')})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )
-              }
+               if (isSelectWhere) {
+                 return (
+                   <div key={k} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                     {labelEl}
+                     <select
+                       value={val as string ?? ''}
+                       onChange={(e) => onUpdate({ [k]: e.target.value || undefined })}
+                       style={S.sel}
+                     >
+                       <option value="">None</option>
+                       {signalSources.map((sig) => (
+                         <option key={sig.id} value={String(sig.id)}>
+                           #[sig-{sig.id}] {sig.name}
+                         </option>
+                       ))}
+                     </select>
+                   </div>
+                 )
+               }
               const cond = (algo as Record<string, unknown>).signal_condition as Record<string, unknown> | null | undefined
               const condOp = (cond as Record<string, unknown>)?.op as string | undefined
               return (
                 <div key={k} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <span style={S.label}>{k}</span>
+                  {labelEl}
                   <div style={S.row}>
                     <select
                       value={val as string ?? ''}
@@ -154,14 +190,14 @@ function AlgoItem({
                     checked={Boolean(val)}
                     onChange={(e) => onUpdate({ [k]: e.target.checked })}
                   />
-                  <span style={S.label}>{k}</span>
+                  {labelEl}
                 </label>
               )
             }
             if (t === 'integer' || t === 'number' || t === 'float') {
               return (
                 <label key={k} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <span style={S.label}>{k}</span>
+                  {labelEl}
                   <input
                     type="number"
                     value={val as string | number | undefined ?? ''}
@@ -176,7 +212,7 @@ function AlgoItem({
             }
             return (
               <label key={k} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={S.label}>{k}</span>
+                {labelEl}
                 <input
                   type="text"
                   value={(val as string) ?? ''}
@@ -336,7 +372,7 @@ export default function AlgoStack({ nodeId }: { nodeId: string }) {
           <SortableContext items={algos.map((a, i) => `${a.class_name}-${i}`)} strategy={verticalListSortingStrategy}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {algos.map((a, i) => (
-                <AlgoItem key={`${a.class_name}-${i}`} algo={a} idx={i} onRemove={() => removeAt(i)} onUpdate={(p) => updateAt(i, p)} indicatorSources={indicatorSources} signalSources={signalSources} />
+                <AlgoItem key={`${a.class_name}-${i}`} algo={a} idx={i} onRemove={() => removeAt(i)} onUpdate={(p) => updateAt(i, p)} indicatorSources={indicatorSources} signalSources={signalSources} meta={metas.find((m) => m.name === a.class_name) ?? null} />
               ))}
             </div>
           </SortableContext>

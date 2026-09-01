@@ -55,6 +55,29 @@ def _parse_requires_sets(doc: str) -> tuple[str | None, str | None]:
     return requires, sets
 
 
+def _parse_args_doc(doc: str) -> dict[str, str]:
+    params: dict[str, str] = {}
+    m = re.search(r"Args:\s*\n((?:[^\n]*\n)*?)(?:\n\s*\n|\n\s*[A-Z][a-z]+:|\Z)", doc)
+    if not m:
+        return params
+    current_param: str | None = None
+    current_desc: list[str] = []
+    for line in m.group(1).split("\n"):
+        pm = re.match(r"\s*\*\s*(\w+)\s*\([^)]*\):\s*(.*)", line)
+        if pm:
+            if current_param:
+                params[current_param] = " ".join(current_desc).strip()
+            current_param = pm.group(1)
+            current_desc = [pm.group(2).strip()]
+        else:
+            stripped = line.strip()
+            if stripped and current_param:
+                current_desc.append(stripped)
+    if current_param:
+        params[current_param] = " ".join(current_desc).strip()
+    return params
+
+
 def _is_dataframe_param(algo_name: str, param_name: str) -> bool:
     return (algo_name, param_name) in DATAFRAME_PARAM_ALGOS
 
@@ -80,12 +103,14 @@ def discover_algos() -> dict[str, dict]:
             }
         doc = (obj.__doc__ or "").strip()
         requires, sets = _parse_requires_sets(doc)
+        param_docs = _parse_args_doc(doc)
         out[name] = {
             "category": cat,
             "params": params,
             "doc": doc[:800],
             "requires": requires,
             "sets": sets,
+            "param_docs": param_docs,
         }
     return out
 

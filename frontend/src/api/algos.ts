@@ -1,6 +1,6 @@
 import { request } from './request'
 
-export type AlgoMeta = { name: string; category: string; doc: string; requires: string | null; sets: string | null }
+export type AlgoMeta = { name: string; category: string; doc: string; requires: string | null; sets: string | null; param_docs: Record<string, string> }
 export type AlgoSchema = { title: string; type: string; properties: Record<string, { type: string; default: unknown }>; required: string[] }
 
 export const algosApi = {
