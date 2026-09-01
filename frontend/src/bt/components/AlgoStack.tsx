@@ -72,6 +72,7 @@ function AlgoItem({
         </span>
         <Tooltip
           trigger={<strong style={S.algoName}>{algo.class_name}</strong>}
+          fullWidth
           content={firstLine ? (
             <span>
               {firstLine}
