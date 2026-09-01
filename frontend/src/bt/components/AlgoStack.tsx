@@ -4,6 +4,7 @@ import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } 
 import { CSS } from '@dnd-kit/utilities'
 import { algosApi, dataApi, type AlgoMeta, type AlgoSchema, type DataSourceRow } from '../../api/bt'
 import Tooltip from './Tooltip'
+import { createPortal } from 'react-dom'
 import { useBtStore, findNode } from '../store/btStore'
 import type { AlgoConfig } from '../../types/bt'
 
@@ -17,7 +18,12 @@ const S = {
   input: { background: '#0d1117', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, padding: '4px 6px', width: '100%' },
   label: { fontSize: 12, color: '#8b949e', cursor: 'help' },
   handle: { cursor: 'grab', padding: '0 4px', color: '#8b949e', userSelect: 'none' as const },
-  algoName: { fontSize: 13, cursor: 'help' },
+  algoName: { fontSize: 13 },
+  helpBtn: {
+    width: 20, height: 20, borderRadius: '50%', border: '1px solid #30363d',
+    background: '#21262d', color: '#8b949e', fontSize: 11, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+  },
 }
 
 function AlgoItem({
@@ -40,6 +46,7 @@ function AlgoItem({
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: `${algo.class_name}-${idx}` })
   const style = { transform: CSS.Transform.toString(transform), transition }
   const [schema, setSchema] = useState<AlgoSchema | null>(null)
+  const [modalDoc, setModalDoc] = useState<string | null>(null)
   const isSelectWhere = algo.class_name === 'SelectWhere'
 
   useEffect(() => {
@@ -60,20 +67,25 @@ function AlgoItem({
   const docTooltip = meta?.doc ?? ''
 
   return (
-    <div ref={setNodeRef} style={{ ...S.item, ...style }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={S.handle} {...attributes} {...listeners}>
-          ⋮⋮
-        </span>
-        <Tooltip
-          trigger={<strong style={S.algoName}>{algo.class_name}</strong>}
-          fullWidth
-          content={docTooltip}
-        />
-        <button onClick={onRemove} type="button" style={{ background: 'transparent', border: 'none', color: '#f85149', cursor: 'pointer' }}>
-          ×
-        </button>
-      </div>
+    <>
+      <div ref={setNodeRef} style={{ ...S.item, ...style }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={S.handle} {...attributes} {...listeners}>
+            ⋮⋮
+          </span>
+          <strong style={S.algoName}>{algo.class_name}</strong>
+          <button
+            type="button"
+            style={S.helpBtn}
+            onClick={() => setModalDoc(docTooltip || null)}
+            title="Vedi documentazione"
+          >
+            ?
+          </button>
+          <button onClick={onRemove} type="button" style={{ background: 'transparent', border: 'none', color: '#f85149', cursor: 'pointer' }}>
+            ×
+          </button>
+        </div>
       {schema && Object.keys(schema.properties).length > 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {Object.entries(schema.properties).map(([k, pmeta]) => {
@@ -207,7 +219,22 @@ function AlgoItem({
       ) : (
         <span style={S.label}>no params</span>
       )}
-    </div>
+      </div>
+      {modalDoc !== null && createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+             onClick={() => setModalDoc(null)}>
+          <div style={{ background: '#0d1117', border: '1px solid #30363d', borderRadius: 8, padding: 16, maxWidth: 500, maxHeight: '80vh', overflowY: 'auto', width: '90%' }}
+               onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: '#c9d1d9' }}>{algo.class_name} — 文档</span>
+              <button type="button" onClick={() => setModalDoc(null)} style={{ background: 'transparent', border: 'none', color: '#8b949e', fontSize: 18, cursor: 'pointer' }}>✕</button>
+            </div>
+            <pre style={{ fontSize: 11, color: '#c9d1d9', whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0, lineHeight: 1.6 }}>{modalDoc}</pre>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
   )
 }
 
