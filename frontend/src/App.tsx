@@ -5,7 +5,6 @@ import DataDetailView from './bt/components/DataDetailView'
 import ResultsDashboard from './bt/components/ResultsDashboard'
 import SettingsView from './bt/components/SettingsView'
 import StrategiesView from './bt/components/StrategiesView'
-import RunDialog from './bt/components/RunDialog'
 import { dbApi, type DbInfo } from './api/bt'
 
 type View = 'builder' | 'results' | 'strategies' | 'data' | 'data-detail' | 'settings'
@@ -27,6 +26,11 @@ export default function App() {
       await dbApi.switch(db)
       window.location.reload()
     } catch (e) { alert(String(e)) }
+  }
+
+  const handleRunCreated = (id: number) => {
+    setRunId(id)
+    setView('results')
   }
 
   return (
@@ -87,19 +91,7 @@ export default function App() {
   {/* health moved to Settings */}
 
       </nav>
-      {view === 'builder' && (
-        <>
-          <BuilderView />
-          <div style={{ marginTop: 12 }}>
-            <RunDialog
-              onRunCreated={(id) => {
-                setRunId(id)
-                setView('results')
-              }}
-            />
-          </div>
-        </>
-      )}
+      {view === 'builder' && <BuilderView onRunCreated={handleRunCreated} />}
       {view === 'results' && <ResultsDashboard runId={runId} />}
       {view === 'data' && <DataManager />}
       {view === 'data-detail' && <DataDetailView />}

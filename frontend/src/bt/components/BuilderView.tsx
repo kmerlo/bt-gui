@@ -7,6 +7,7 @@ import TreeEditor from './TreeEditor'
 import NodeInspector from './NodeInspector'
 import IndicatorPanel from './IndicatorPanel'
 import SignalPanel from './SignalPanel'
+import RunDialog from './RunDialog'
 
 const NODE_TYPES = ['Strategy', 'Security', 'FixedIncomeStrategy', 'HedgeSecurity', 'CouponPayingSecurity'] as const
 type NodeType = (typeof NODE_TYPES)[number]
@@ -16,7 +17,8 @@ const S = {
   input: { background: '#0d1117', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, padding: '6px 8px', minWidth: 180 },
   btn: { background: '#21262d', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, padding: '6px 10px', cursor: 'pointer' },
   btnPri: { background: '#238636', color: '#fff', border: '1px solid #30363d', borderRadius: 6, padding: '6px 10px', cursor: 'pointer' },
-  layout: { display: 'flex', gap: 12, alignItems: 'flex-start' },
+  layout: { display: 'grid', gridTemplateColumns: '180px 1fr', gap: 12, alignItems: 'flex-start' },
+  panelRight: { display: 'flex', flexDirection: 'column' as const, gap: 12 },
   palette: { width: 180, minWidth: 180, border: '1px solid #30363d', borderRadius: 8, background: '#0d1117', padding: 10, display: 'flex', flexDirection: 'column' as const, gap: 8 },
   card: { border: '1px solid #30363d', borderRadius: 6, background: '#161b22', padding: '8px 10px', cursor: 'grab', fontSize: 13, color: '#c9d1d9' },
   msg: { fontSize: 12, color: '#8b949e' },
@@ -32,7 +34,7 @@ function PaletteCard({ type }: { type: NodeType }) {
   return <div ref={setNodeRef} style={style} {...attributes} {...listeners}>{icon[type] ?? '•'} {type}</div>
 }
 
-export default function BuilderView() {
+export default function BuilderView({ onRunCreated }: { onRunCreated?: (id: number) => void }) {
   const tree = useBtStore((s) => s.tree)
   const setTree = useBtStore((s) => s.setTree)
   const showIndicators = useBtStore((s) => s.showIndicators)
@@ -75,6 +77,7 @@ export default function BuilderView() {
       </div>
       <DndContext collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd}>
         <div style={S.layout}>
+          {/* Riga 1: Palette | Canvas */}
           {showPalette && (
             <div style={S.palette}>
               <div style={{ fontSize: 12, color: '#8b949e', fontWeight: 700 }}>Palette</div>
@@ -83,10 +86,17 @@ export default function BuilderView() {
             </div>
           )}
           <TreeEditor />
+
+          {/* Riga 2: Inspector | Indicators + Signals */}
           <NodeInspector />
+          <div style={S.panelRight}>
+            {showIndicators && <IndicatorPanel />}
+            {showSignals && <SignalPanel />}
+          </div>
+
+          {/* Riga 3: Run Backtest */}
+          <RunDialog onRunCreated={onRunCreated} />
         </div>
-        {showIndicators && <IndicatorPanel />}
-        {showSignals && <SignalPanel />}
         <DragOverlay>{activeType ? <div style={{ ...S.card, opacity: 0.9 }}>{activeType}</div> : null}</DragOverlay>
       </DndContext>
     </div>
