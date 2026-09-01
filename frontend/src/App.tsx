@@ -37,9 +37,6 @@ export default function App() {
     window.addEventListener('hashchange', applyHash)
     return () => window.removeEventListener('hashchange', applyHash)
   }, [])
-  useEffect(() => {
-    window.location.hash = view
-  }, [view])
 
   // listen for View button clicks from IndicatorsView / SignalsView
   useEffect(() => {
