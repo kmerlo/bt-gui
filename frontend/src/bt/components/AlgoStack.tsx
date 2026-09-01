@@ -18,7 +18,6 @@ const S = {
   label: { fontSize: 12, color: '#8b949e', cursor: 'help' },
   handle: { cursor: 'grab', padding: '0 4px', color: '#8b949e', userSelect: 'none' as const },
   algoName: { fontSize: 13, cursor: 'help' },
-  expandBtn: { fontSize: 11, color: '#58a6ff', cursor: 'pointer', background: 'none', border: 'none', padding: 0, lineHeight: 1 },
 }
 
 function AlgoItem({
@@ -41,7 +40,6 @@ function AlgoItem({
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: `${algo.class_name}-${idx}` })
   const style = { transform: CSS.Transform.toString(transform), transition }
   const [schema, setSchema] = useState<AlgoSchema | null>(null)
-  const [expanded, setExpanded] = useState(false)
   const isSelectWhere = algo.class_name === 'SelectWhere'
 
   useEffect(() => {
@@ -60,9 +58,6 @@ function AlgoItem({
   }, [algo.class_name])
 
   const docTooltip = meta?.doc ?? ''
-  const docLines = docTooltip.split('\n').filter(Boolean)
-  const firstLine = docLines[0] ?? ''
-  const extraLines = docLines.slice(1).join('\n')
 
   return (
     <div ref={setNodeRef} style={{ ...S.item, ...style }}>
@@ -73,22 +68,7 @@ function AlgoItem({
         <Tooltip
           trigger={<strong style={S.algoName}>{algo.class_name}</strong>}
           fullWidth
-          content={firstLine ? (
-            <span>
-              {firstLine}
-              {extraLines && (
-                <>
-                  {expanded ? <br /> : '…'}
-                  {expanded ? extraLines : null}
-                </>
-              )}
-              {extraLines && (
-                <button style={S.expandBtn} onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}>
-                  {expanded ? '[chiudi]' : '[espandi]'}
-                </button>
-              )}
-            </span>
-          ) : ''}
+          content={docTooltip}
         />
         <button onClick={onRemove} type="button" style={{ background: 'transparent', border: 'none', color: '#f85149', cursor: 'pointer' }}>
           ×

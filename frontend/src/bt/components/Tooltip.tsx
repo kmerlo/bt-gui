@@ -9,7 +9,6 @@ export default function Tooltip({ trigger, content, fullWidth }: { trigger: Reac
         position: 'relative',
         display: fullWidth ? 'block' : 'inline-block',
         width: fullWidth ? '100%' : undefined,
-        marginBottom: 8,
       }}
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
