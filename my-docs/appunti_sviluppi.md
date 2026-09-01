@@ -59,3 +59,4 @@
 - [2026-09-01 15:42] algo docs: tooltip sul nome algo (prima riga docstring + espandi/chiudi) e sui label parametri (descrizione da Args:) estratte dal docstring bt. [backend/services/algo_registry.py, backend/api/algos.py, frontend/src/bt/components/AlgoStack.tsx, frontend/src/bt/components/Tooltip.tsx]
 - [2026-09-01 16:23] tooltip: fix scomparsa al movimento mouse (rimosso pointerEvents:none, aggiunto marginBottom:ponte hover) + prop fullWidth per tooltip nome algo che si estende fino al bordo destro dell'Inspector (280-290px). [frontend/src/bt/components/Tooltip.tsx, frontend/src/bt/components/AlgoStack.tsx]
 - [2026-09-01 16:33] tooltip: rimosso espandi/chiudi, docstring mostrata tutta in una volta sul nome algo. [frontend/src/bt/components/Tooltip.tsx, frontend/src/bt/components/AlgoStack.tsx]
+- [2026-09-01 16:35] algo: ?按钮替代tooltip，点击弹出fixed模态框显示完整docstring，遮罩或✕关闭。 [frontend/src/bt/components/AlgoStack.tsx]
