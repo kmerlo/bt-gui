@@ -13,19 +13,18 @@ Repo separato da `bt` (sibling `../bt`), dipendenza `bt @ file://../bt` in dev.
 ## Comandi
 
 ```bash
-# Backend
+# Avvio rapido (backend + frontend in un unico script)
+./scripts/dev.sh
+
+# Singoli processi (per sviluppo isolato o terminal separati)
 uv sync
 uv run uvicorn backend.main:app --host 127.0.0.1 --port 8001 --reload
+cd frontend && npm run dev -- --port 3001
+
+# Testing e lint
 uv run pytest -q
 uv run ruff check .
-
-# Frontend
-cd frontend && npm install
-npm run dev -- --port 3001
 npm run build   # tsc -b && vite build
-
-# Entrambi
-./scripts/dev.sh
 ```
 
 ## Integrazione Stocks_App

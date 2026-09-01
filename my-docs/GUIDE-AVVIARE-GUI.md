@@ -11,9 +11,18 @@
 
 ## 1. Modalità A — Standalone (bt-gui isolato)
 
-Avvia il backend e frontend di bt-gui come processi separati.
+Esistono due modi per avviare bt-gui standalone:
 
-### 1.1 Avvia il backend (porta 8001)
+### 1.0 Avvio rapido con script unico (consigliato)
+
+```bash
+cd /home/roberto/Documents/progetti/bt-gui
+./scripts/dev.sh
+```
+
+Lo script avvia backend (:8001) e frontend (:3001) in background, gestisce lo stop con Ctrl+C e lancia `uv sync` prima dell'avvio.
+
+### 1.1 Avvio con terminal separati (alternativa)
 
 ```bash
 cd /home/roberto/Documents/progetti/bt-gui
