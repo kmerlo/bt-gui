@@ -22,15 +22,20 @@ export default function App() {
   const refreshDb = () => dbApi.info().then(setDbInfo).catch(() => {})
   useEffect(() => { refreshDb() }, [])
 
-  // sync hash ↔ view (read on mount, write on change)
+  // sync hash ↔ view (mount + hashchange for back/forward + anchor clicks)
   useEffect(() => {
-    const h = window.location.hash.replace(/^#/, '') as View | ''
-    if (
-      h === 'builder' || h === 'results' || h === 'strategies' ||
-      h === 'data' || h === 'indicators' || h === 'signals' || h === 'settings'
-    ) {
-      setView(h)
+    const applyHash = () => {
+      const h = window.location.hash.replace(/^#/, '') as View | ''
+      if (
+        h === 'builder' || h === 'results' || h === 'strategies' ||
+        h === 'data' || h === 'indicators' || h === 'signals' || h === 'settings'
+      ) {
+        setView(h)
+      }
     }
+    applyHash()
+    window.addEventListener('hashchange', applyHash)
+    return () => window.removeEventListener('hashchange', applyHash)
   }, [])
   useEffect(() => {
     window.location.hash = view
@@ -128,13 +133,9 @@ export default function App() {
 
       <nav style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
         {NAV_ITEMS.map(({ id, label }) => (
-          <button
+          <a
             key={id}
-            onClick={() => setView(id)}
-            onContextMenu={(e) => {
-              e.preventDefault()
-              window.open(`${window.location.pathname}#${id}`, '_blank')
-            }}
+            href={`#${id}`}
             style={{
               fontWeight: view === id ? '700' : '400',
               background: view === id ? '#21262d' : 'transparent',
@@ -143,11 +144,11 @@ export default function App() {
               borderRadius: 6,
               padding: '6px 10px',
               cursor: 'pointer',
+              textDecoration: 'none',
             }}
-            type="button"
           >
             {label}
-          </button>
+          </a>
         ))}
       </nav>
       {view === 'builder' && <BuilderView onRunCreated={handleRunCreated} />}
