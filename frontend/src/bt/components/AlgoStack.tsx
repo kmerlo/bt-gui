@@ -36,6 +36,7 @@ function AlgoItem({
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: `${algo.class_name}-${idx}` })
   const style = { transform: CSS.Transform.toString(transform), transition }
   const [schema, setSchema] = useState<AlgoSchema | null>(null)
+  const isSelectWhere = algo.class_name === 'SelectWhere'
 
   useEffect(() => {
     let alive = true
@@ -68,8 +69,28 @@ function AlgoItem({
           {Object.entries(schema.properties).map(([k, meta]) => {
             const val = (algo.params as Record<string, unknown>)[k]
             const t = meta.type
-            // indicator ref → render select with available indicators + signal condition
+            // indicator ref → render select with available indicators
             if ((meta as Record<string, unknown>).kind === 'indicator') {
+              // ponytail: SelectWhere.signal è un indicatore puro, nessuna condizione
+              if (isSelectWhere) {
+                return (
+                  <div key={k} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={S.label}>{k}</span>
+                    <select
+                      value={val as string ?? ''}
+                      onChange={(e) => onUpdate({ [k]: e.target.value || undefined })}
+                      style={S.sel}
+                    >
+                      <option value="">None</option>
+                      {indicatorSources.map((ind) => (
+                        <option key={ind.id} value={String(ind.id)}>
+                          #{ind.id} {ind.name} ({String((ind.meta as Record<string, unknown>)?.indicator_type ?? '?')})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )
+              }
               const cond = (algo as Record<string, unknown>).signal_condition as Record<string, unknown> | null | undefined
               const condOp = (cond as Record<string, unknown>)?.op as string | undefined
               return (
