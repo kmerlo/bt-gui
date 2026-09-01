@@ -24,7 +24,13 @@ const S = {
 
 type TableResp = { columns: string[]; rows: Record<string, unknown>[]; total: number; offset: number; limit: number }
 
-export default function DataDetailView() {
+interface Props {
+  selectedId: number | null
+  selectedType: 'indicator' | 'signal' | null
+  onBack: () => void
+}
+
+export default function DataDetailView({ selectedId, selectedType, onBack }: Props) {
   // Price data state
   const [tickers, setTickers] = useState<{ symbol: string; interval: string; start: string; end: string; count: number }[]>([])
   const [selectedSymbol, setSelectedSymbol] = useState<string>('')
@@ -52,15 +58,41 @@ export default function DataDetailView() {
   const [indSearchDraft, setIndSearchDraft] = useState('')
   const [indMsg, setIndMsg] = useState('')
 
+  // Signal state
+  const [signals, setSignals] = useState<DataSourceRow[]>([])
+  const [selectedSignalId, setSelectedSignalId] = useState<number | null>(null)
+  const [sigTable, setSigTable] = useState<TableResp | null>(null)
+  const [sigLoading, setSigLoading] = useState(false)
+  const [sigPage, setSigPage] = useState(0)
+  const [sigPageSize, setSigPageSize] = useState(50)
+  const [sigSortBy, setSigSortBy] = useState<string | null>('date')
+  const [sigSortDir, setSigSortDir] = useState<'asc' | 'desc'>('desc')
+  const [sigSearch, setSigSearch] = useState('')
+  const [sigSearchDraft, setSigSearchDraft] = useState('')
+  const [sigMsg, setSigMsg] = useState('')
+
   const currentTicker = tickers.find((t) => t.symbol === selectedSymbol)
 
   useEffect(() => {
     priceDataApi.list().then(setTickers).catch((e: unknown) => setPriceMsg(String(e)))
     dataApi.listIndicators().then(setIndicators).catch((e: unknown) => setIndMsg(String(e)))
+    dataApi.listSignals().then(setSignals).catch((e: unknown) => setSigMsg(String(e)))
   }, [])
+
+  // initialise from nav props
+  useEffect(() => {
+    if (selectedType === 'indicator' && selectedId !== null) {
+      setSelectedIndicatorId(selectedId)
+      setSelectedSignalId(null)
+    } else if (selectedType === 'signal' && selectedId !== null) {
+      setSelectedSignalId(selectedId)
+      setSelectedIndicatorId(null)
+    }
+  }, [selectedId, selectedType])
 
   useEffect(() => { setPricePage(0) }, [selectedSymbol, priceSearch, priceSortBy, priceSortDir, pricePageSize])
   useEffect(() => { setIndPage(0) }, [selectedIndicatorId, indSearch, indSortBy, indSortDir, indPageSize])
+  useEffect(() => { setSigPage(0) }, [selectedSignalId, sigSearch, sigSortBy, sigSortDir, sigPageSize])
 
   useEffect(() => {
     if (!selectedSymbol) { setPriceRows([]); setPriceTotal(0); return }
@@ -69,7 +101,6 @@ export default function DataDetailView() {
     priceDataApi.getRows(selectedSymbol, { sort_by: priceSortBy ?? undefined, sort_dir: priceSortDir, search: priceSearch || undefined, limit: pricePageSize, offset: pricePage * pricePageSize }).then((rows) => {
       setPriceRows(rows)
       if (priceSearch) {
-        // quando search attivo, total approximated — server non ritorna total
         setPriceTotal(rows.length === pricePageSize ? pricePage * pricePageSize + rows.length + 1 : pricePage * pricePageSize + rows.length)
       } else {
         setPriceTotal(currentTicker?.count ?? rows.length)
@@ -91,11 +122,31 @@ export default function DataDetailView() {
     }).then(setIndTable).catch((e: unknown) => { setIndMsg(String(e)) }).finally(() => setIndLoading(false))
   }, [selectedIndicatorId, indPage, indPageSize, indSortBy, indSortDir, indSearch])
 
+  useEffect(() => {
+    if (selectedSignalId === null) { setSigTable(null); return }
+    setSigLoading(true)
+    setSigMsg('')
+    dataApi.table(selectedSignalId, {
+      limit: sigPageSize,
+      offset: sigPage * sigPageSize,
+      sort_by: sigSortBy ?? undefined,
+      sort_dir: sigSortDir,
+      search: sigSearch || undefined,
+    }).then(setSigTable).catch((e: unknown) => { setSigMsg(String(e)) }).finally(() => setSigLoading(false))
+  }, [selectedSignalId, sigPage, sigPageSize, sigSortBy, sigSortDir, sigSearch])
+
   const priceTotalPages = Math.ceil(priceTotal / pricePageSize)
   const indTotalPages = indTable ? Math.ceil(indTable.total / indPageSize) : 0
+  const sigTotalPages = sigTable ? Math.ceil(sigTable.total / sigPageSize) : 0
 
   return (
     <div style={S.wrap}>
+      <div style={{ ...S.row, marginBottom: 16 }}>
+        <button type="button" style={S.btn} onClick={onBack}>← Indietro</button>
+        {selectedType === 'indicator' && <span style={S.header}>Indicator # {selectedId}</span>}
+        {selectedType === 'signal' && <span style={S.header}>Signal # {selectedId}</span>}
+      </div>
+
       {/* ── Price Data Section ── */}
       <div style={S.section}>
         <div style={S.sectionTitle}>Price Data</div>
@@ -251,6 +302,91 @@ export default function DataDetailView() {
                 <button type="button" style={indPage === 0 ? S.btnDis : S.btn} disabled={indPage === 0} onClick={() => setIndPage((p) => Math.max(0, p - 1))}>‹ Prev</button>
                 <span style={{ fontSize: 13 }}>pag. {indPage + 1} / {Math.max(indTotalPages, 1)}</span>
                 <button type="button" style={indPage + 1 >= indTotalPages ? S.btnDis : S.btn} disabled={indPage + 1 >= indTotalPages} onClick={() => setIndPage((p) => p + 1)}>Next ›</button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* ── Signals Section ── */}
+      <div style={S.section}>
+        <div style={S.sectionTitle}>Signals <span style={{ fontSize: 12, color: '#8b949e' }}>({signals.length} salvati)</span></div>
+        {signals.length === 0 ? (
+          <div style={{ fontSize: 13, color: '#8b949e', padding: '8px 0' }}>Nessun signal calcolato. Usa il pannello Signals nel Builder per crearne.</div>
+        ) : (
+          <>
+            <div style={S.row}>
+              <select
+                style={{ ...S.select, minWidth: 260 }}
+                value={selectedSignalId ?? ''}
+                onChange={(e) => setSelectedSignalId(e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">— seleziona signal —</option>
+                {signals.map((sig) => (
+                  <option key={sig.id} value={sig.id}>
+                    {sig.name} ({sig.path_or_tickers})
+                  </option>
+                ))}
+              </select>
+              <input
+                style={S.input}
+                placeholder="cerca…"
+                value={sigSearchDraft}
+                onChange={(e) => setSigSearchDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') setSigSearch(sigSearchDraft) }}
+              />
+              <button type="button" style={S.btn} onClick={() => setSigSearch(sigSearchDraft)}>Filtra</button>
+              {(sigSearch || sigSortBy || sigSortDir !== 'desc') && (
+                <button type="button" style={S.btn} onClick={() => { setSigSearch(''); setSigSearchDraft(''); setSigSortBy('date'); setSigSortDir('desc') }}>Reset</button>
+              )}
+              <select style={S.select} value={sigPageSize} onChange={(e) => setSigPageSize(Number(e.target.value))}>
+                {PAGE_SIZES.map((s) => <option key={s} value={s}>{s} / pagina</option>)}
+              </select>
+            </div>
+            {sigMsg && <div style={S.msgErr}>{sigMsg}</div>}
+            {sigLoading && <div style={S.header}>caricamento…</div>}
+            {sigTable && sigTable.rows.length > 0 && (
+              <div style={{ overflow: 'auto', maxHeight: '40vh', border: '1px solid #30363d', borderRadius: 6 }}>
+                <table style={S.table}>
+                  <thead>
+                    <tr>
+                      <th style={sigSortBy === 'date' ? S.thActive : S.th} onClick={() => {
+                        if (sigSortBy === 'date') setSigSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+                        else { setSigSortBy('date'); setSigSortDir('asc') }
+                      }}>
+                        date {sigSortBy === 'date' ? (sigSortDir === 'asc' ? '▲' : '▼') : '↕'}
+                      </th>
+                      {sigTable.columns.map((c) => (
+                        <th key={c} style={sigSortBy === c ? S.thActive : S.th} onClick={() => {
+                          if (sigSortBy === c) setSigSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+                          else { setSigSortBy(c); setSigSortDir('asc') }
+                        }}>
+                          {c} {sigSortBy === c ? (sigSortDir === 'asc' ? '▲' : '▼') : '↕'}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sigTable.rows.map((row, i) => (
+                      <tr key={i}>
+                        <td style={S.td}>{formatDate(String(row['date'] ?? ''))}</td>
+                        {sigTable.columns.map((c) => (
+                          <td key={c} style={S.td}>{row[c] === null || row[c] === undefined ? '' : String(row[c])}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {sigTable && sigTable.rows.length === 0 && !sigLoading && selectedSignalId !== null && (
+              <div style={{ fontSize: 13, color: '#8b949e', padding: 8 }}>Nessun dato per questo signal</div>
+            )}
+            {sigTable && sigTable.rows.length > 0 && (
+              <div style={{ ...S.row, marginTop: 8 }}>
+                <button type="button" style={sigPage === 0 ? S.btnDis : S.btn} disabled={sigPage === 0} onClick={() => setSigPage((p) => Math.max(0, p - 1))}>‹ Prev</button>
+                <span style={{ fontSize: 13 }}>pag. {sigPage + 1} / {Math.max(sigTotalPages, 1)}</span>
+                <button type="button" style={sigPage + 1 >= sigTotalPages ? S.btnDis : S.btn} disabled={sigPage + 1 >= sigTotalPages} onClick={() => setSigPage((p) => p + 1)}>Next ›</button>
               </div>
             )}
           </>

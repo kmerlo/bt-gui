@@ -2,22 +2,47 @@ import { useEffect, useState } from 'react'
 import BuilderView from './bt/components/BuilderView'
 import DataManager from './bt/components/DataManager'
 import DataDetailView from './bt/components/DataDetailView'
+import IndicatorsView from './bt/components/IndicatorsView'
+import SignalsView from './bt/components/SignalsView'
 import ResultsDashboard from './bt/components/ResultsDashboard'
 import SettingsView from './bt/components/SettingsView'
 import StrategiesView from './bt/components/StrategiesView'
 import { dbApi, type DbInfo } from './api/bt'
 
-type View = 'builder' | 'results' | 'strategies' | 'data' | 'data-detail' | 'settings'
+type View = 'builder' | 'results' | 'strategies' | 'data' | 'indicators' | 'signals' | 'data-detail' | 'settings'
 
 export default function App() {
   const [view, setView] = useState<View>('builder')
   const [runId, setRunId] = useState<number | null>(null)
   const [dbInfo, setDbInfo] = useState<DbInfo | null>(null)
+  const [detailId, setDetailId] = useState<number | null>(null)
+  const [detailType, setDetailType] = useState<'indicator' | 'signal' | null>(null)
 
   const refreshDb = () => dbApi.info().then(setDbInfo).catch(() => {})
   useEffect(() => { refreshDb() }, [])
-  // refresh DB info when view changes (so counts stay fresh)
   useEffect(() => { refreshDb() }, [view])
+
+  // listen for View button clicks from IndicatorsView / SignalsView
+  useEffect(() => {
+    const onIndicator = (e: Event) => {
+      const id = (e as CustomEvent).detail as number
+      setDetailId(id)
+      setDetailType('indicator')
+      setView('data-detail')
+    }
+    const onSignal = (e: Event) => {
+      const id = (e as CustomEvent).detail as number
+      setDetailId(id)
+      setDetailType('signal')
+      setView('data-detail')
+    }
+    window.addEventListener('bt-navigate-indicator', onIndicator)
+    window.addEventListener('bt-navigate-signal', onSignal)
+    return () => {
+      window.removeEventListener('bt-navigate-indicator', onIndicator)
+      window.removeEventListener('bt-navigate-signal', onSignal)
+    }
+  }, [])
 
   const handleSwitchDb = async (db: 'main' | 'test') => {
     if (dbInfo?.active === db) return
@@ -32,6 +57,16 @@ export default function App() {
     setRunId(id)
     setView('results')
   }
+
+  const NAV_ITEMS: { id: View; label: string }[] = [
+    { id: 'builder', label: 'builder' },
+    { id: 'results', label: 'results' },
+    { id: 'strategies', label: 'strategies' },
+    { id: 'data', label: 'data' },
+    { id: 'indicators', label: 'indicators' },
+    { id: 'signals', label: 'signals' },
+    { id: 'settings', label: 'settings' },
+  ]
 
   return (
     <div style={{ padding: 16, fontFamily: 'system-ui', background: '#010409', color: '#c9d1d9', minHeight: '100vh' }}>
@@ -70,13 +105,13 @@ export default function App() {
       </div>
 
       <nav style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
-        {(['builder', 'results', 'strategies', 'data', 'data-detail', 'settings'] as View[]).map((v) => (
+        {NAV_ITEMS.map(({ id, label }) => (
           <button
-            key={v}
-            onClick={() => setView(v)}
+            key={id}
+            onClick={() => setView(id)}
             style={{
-              fontWeight: view === v ? '700' : '400',
-              background: view === v ? '#21262d' : 'transparent',
+              fontWeight: view === id ? '700' : '400',
+              background: view === id ? '#21262d' : 'transparent',
               color: '#c9d1d9',
               border: '1px solid #30363d',
               borderRadius: 6,
@@ -85,16 +120,16 @@ export default function App() {
             }}
             type="button"
           >
-            {v}
+            {label}
           </button>
         ))}
-  {/* health moved to Settings */}
-
       </nav>
       {view === 'builder' && <BuilderView onRunCreated={handleRunCreated} />}
       {view === 'results' && <ResultsDashboard runId={runId} />}
       {view === 'data' && <DataManager />}
-      {view === 'data-detail' && <DataDetailView />}
+      {view === 'indicators' && <IndicatorsView />}
+      {view === 'signals' && <SignalsView />}
+      {view === 'data-detail' && <DataDetailView selectedId={detailId} selectedType={detailType} onBack={() => setView('indicators')} />}
       {view === 'strategies' && <StrategiesView />}
       {view === 'settings' && <SettingsView />}
     </div>

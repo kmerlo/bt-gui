@@ -5,8 +5,8 @@ import DateInputIT from './DateInputIT'
 
 const S = {
   wrap: {
-    width: 260,
-    minWidth: 260,
+    width: 340,
+    minWidth: 340,
     border: '1px solid #30363d',
     borderRadius: 8,
     background: '#0d1117',
