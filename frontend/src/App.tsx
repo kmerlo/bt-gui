@@ -88,11 +88,9 @@ export default function App() {
 
       </nav>
       {view === 'builder' && (
-        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-          <div style={{ flex: 1 }}>
-            <BuilderView />
-          </div>
-          <div style={{ width: 340, minWidth: 300, alignSelf: 'flex-start', marginTop: 44 }}>
+        <>
+          <BuilderView />
+          <div style={{ marginTop: 12 }}>
             <RunDialog
               onRunCreated={(id) => {
                 setRunId(id)
@@ -100,7 +98,7 @@ export default function App() {
               }}
             />
           </div>
-        </div>
+        </>
       )}
       {view === 'results' && <ResultsDashboard runId={runId} />}
       {view === 'data' && <DataManager />}

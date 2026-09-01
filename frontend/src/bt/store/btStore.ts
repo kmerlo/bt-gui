@@ -19,6 +19,7 @@ export type BtStore = {
   selectedRunId: number | null
   showIndicators: boolean
   showSignals: boolean
+  showPalette: boolean
   tickerStart: string | null
   tickerEnd: string | null
   priceColumn: 'close' | 'adj_close'
@@ -31,6 +32,7 @@ export type BtStore = {
   setSelectedRun: (id: number | null) => void
   toggleIndicators: () => void
   toggleSignals: () => void
+  togglePalette: () => void
   setTickerStart: (v: string) => void
   setTickerEnd: (v: string) => void
   setPriceColumn: (v: 'close' | 'adj_close') => void
@@ -49,7 +51,7 @@ const _init = _stored ?? _defPreset
 
 function persist(get: () => BtStore): void {
   const s = get()
-  saveStoredPreset({
+    saveStoredPreset({
     tickerStart: s.tickerStart,
     tickerEnd: s.tickerEnd,
     priceColumn: s.priceColumn,
@@ -59,6 +61,7 @@ function persist(get: () => BtStore): void {
     selectedId: s.selectedId,
     showIndicators: s.showIndicators,
     showSignals: s.showSignals,
+    showPalette: s.showPalette,
   })
 }
 
@@ -69,6 +72,7 @@ export const useBtStore = create<BtStore>((set, get) => ({
   selectedRunId: null,
   showIndicators: _init.showIndicators,
   showSignals: _init.showSignals ?? false,
+  showPalette: _init.showPalette ?? true,
   tickerStart: _init.tickerStart,
   tickerEnd: _init.tickerEnd,
   priceColumn: _init.priceColumn,
@@ -131,6 +135,11 @@ export const useBtStore = create<BtStore>((set, get) => ({
   toggleSignals: () => {
     const next = !get().showSignals
     set({ showSignals: next })
+    persist(get)
+  },
+  togglePalette: () => {
+    const next = !get().showPalette
+    set({ showPalette: next })
     persist(get)
   },
   setTickerStart: (tickerStart) => {

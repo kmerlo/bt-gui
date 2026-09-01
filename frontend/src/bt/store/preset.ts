@@ -23,6 +23,7 @@ export type StoredPreset = {
   selectedId: string | null
   showIndicators: boolean
   showSignals: boolean
+  showPalette: boolean
 }
 
 function getToday(): string {
@@ -58,6 +59,7 @@ export function loadStoredPreset(): StoredPreset | null {
       selectedId: (p.selectedId as string | null) ?? null,
       showIndicators: Boolean(p.showIndicators),
       showSignals: Boolean(p.showSignals),
+      showPalette: p.showPalette !== false,
     }
   } catch {
     return null
@@ -90,6 +92,7 @@ export function defaultPreset(): StoredPreset {
     selectedId: null,
     showIndicators: false,
     showSignals: false,
+    showPalette: true,
   }
 }
 

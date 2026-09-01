@@ -16,7 +16,7 @@ const S = {
   input: { background: '#0d1117', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, padding: '6px 8px', minWidth: 180 },
   btn: { background: '#21262d', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, padding: '6px 10px', cursor: 'pointer' },
   btnPri: { background: '#238636', color: '#fff', border: '1px solid #30363d', borderRadius: 6, padding: '6px 10px', cursor: 'pointer' },
-  layout: { display: 'flex', gap: 12, height: 'calc(100vh - 100px)', alignItems: 'stretch' },
+  layout: { display: 'flex', gap: 12, alignItems: 'flex-start' },
   palette: { width: 180, minWidth: 180, border: '1px solid #30363d', borderRadius: 8, background: '#0d1117', padding: 10, display: 'flex', flexDirection: 'column' as const, gap: 8 },
   card: { border: '1px solid #30363d', borderRadius: 6, background: '#161b22', padding: '8px 10px', cursor: 'grab', fontSize: 13, color: '#c9d1d9' },
   msg: { fontSize: 12, color: '#8b949e' },
@@ -39,6 +39,8 @@ export default function BuilderView() {
   const toggleIndicators = useBtStore((s) => s.toggleIndicators)
   const showSignals = useBtStore((s) => s.showSignals)
   const toggleSignals = useBtStore((s) => s.toggleSignals)
+  const showPalette = useBtStore((s) => s.showPalette)
+  const togglePalette = useBtStore((s) => s.togglePalette)
   const { activeType, onDragStart, onDragEnd } = useTreeDrag()
   const { nameDraft, setNameDraft, rows, loadId, setLoadId, msg, handleSave, handleSaveAsNew, handleLoad, handleNew, treeNameCommit } = useStrategySave()
 
@@ -57,6 +59,7 @@ export default function BuilderView() {
   return (
     <div>
       <div style={S.top}>
+        <button onClick={togglePalette} type="button" style={{ ...S.btn, minWidth: 36 }} title={showPalette ? 'Nascondi palette' : 'Mostra palette'}>☰</button>
         <input value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} onBlur={treeNameCommit} onKeyDown={(e) => { if (e.key === 'Enter') treeNameCommit() }} style={S.input} placeholder="strategy name" />
         <button onClick={handleSave} type="button" style={S.btnPri}>Salva</button>
         <button onClick={handleSaveAsNew} type="button" style={S.btn}>Salva come nuova</button>
@@ -72,16 +75,18 @@ export default function BuilderView() {
       </div>
       <DndContext collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd}>
         <div style={S.layout}>
-          <div style={S.palette}>
-            <div style={{ fontSize: 12, color: '#8b949e', fontWeight: 700 }}>Palette</div>
-            <div style={{ fontSize: 11, color: '#8b949e' }}>drag onto canvas</div>
-            {NODE_TYPES.map((t) => (<PaletteCard key={t} type={t as NodeType} />))}
-          </div>
+          {showPalette && (
+            <div style={S.palette}>
+              <div style={{ fontSize: 12, color: '#8b949e', fontWeight: 700 }}>Palette</div>
+              <div style={{ fontSize: 11, color: '#8b949e' }}>drag onto canvas</div>
+              {NODE_TYPES.map((t) => (<PaletteCard key={t} type={t as NodeType} />))}
+            </div>
+          )}
           <TreeEditor />
           <NodeInspector />
-          {showIndicators && <IndicatorPanel />}
-          {showSignals && <SignalPanel />}
         </div>
+        {showIndicators && <IndicatorPanel />}
+        {showSignals && <SignalPanel />}
         <DragOverlay>{activeType ? <div style={{ ...S.card, opacity: 0.9 }}>{activeType}</div> : null}</DragOverlay>
       </DndContext>
     </div>
