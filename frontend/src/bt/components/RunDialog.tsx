@@ -74,14 +74,17 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
   useEffect(() => {
     const id = runId
     if (id == null) return
-    const ws = backtestApi.wsProgress(id)
+    // ponytail: no FE key store exists — read operator-set localStorage['bt-api-key'] if present, else plain URL
+    let apiKey: string | undefined
+    try { apiKey = localStorage.getItem('bt-api-key') ?? undefined } catch { apiKey = undefined }
+    const ws = backtestApi.wsProgress(id, apiKey)
     wsRef.current = ws
     abortRef.current = { stopped: false, pollTimer: -1 }
     const onMsg = (ev: MessageEvent) => {
       try {
         const d = JSON.parse(ev.data as string) as { progress: number; done: boolean; error?: string }
         setProgress(d.progress)
-        if (d.error) setMsg(`error: ${d.error}`)
+        if (d.error) setMsg('backtest failed')
         if (d.done) { ws.close(); setRunning(false); setProgress(1) }
       } catch { /* ignore */ }
     }
@@ -101,12 +104,17 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
     }
     ws.addEventListener('message', onMsg)
     ws.addEventListener('error', onErr)
+    const onClose = (ev: CloseEvent) => {
+      if (ev.code === 4401) { setMsg('unauthorized: set localStorage bt-api-key and retry'); setRunning(false) }
+    }
+    ws.addEventListener('close', onClose)
     return () => {
       abortRef.current.stopped = true
       if (abortRef.current.pollTimer) window.clearTimeout(abortRef.current.pollTimer)
       ws.close()
       ws.removeEventListener('message', onMsg)
       ws.removeEventListener('error', onErr)
+      ws.removeEventListener('close', onClose)
       wsRef.current = null
     }
   }, [runId])

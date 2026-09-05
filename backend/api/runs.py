@@ -356,6 +356,17 @@ def get_run_prices(
 
 @router.websocket("/backtest/{run_id}/progress")
 async def ws_progress(websocket: WebSocket, run_id: int):
+    # ponytail: @app.middleware("http") never runs for WS — check key here, before any run-ID signal
+    from backend.middleware import is_valid_api_key
+
+    candidate = (
+        websocket.query_params.get("api_key")
+        or websocket.headers.get("x-api-key")
+        or websocket.headers.get("authorization", "").removeprefix("Bearer ")
+    )
+    if not is_valid_api_key(candidate or None):
+        await websocket.close(code=4401)
+        return
     await websocket.accept()
     try:
         import asyncio

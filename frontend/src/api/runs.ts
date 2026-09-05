@@ -53,5 +53,8 @@ export const backtestApi = {
       method: 'POST',
       body: JSON.stringify({ ids }),
     }),
-  wsProgress: (id: number) => new WebSocket(`${WS_BASE}/api/bt/backtest/${id}/progress`),
+  // ponytail: HTTP request() has no FE key store (dev mode stays open); WS key only via ?api_key= when the operator sets localStorage['bt-api-key']
+  wsProgress: (id: number, apiKey?: string) => new WebSocket(
+    `${WS_BASE}/api/bt/backtest/${id}/progress${apiKey ? `?api_key=${encodeURIComponent(apiKey)}` : ''}`,
+  ),
 }

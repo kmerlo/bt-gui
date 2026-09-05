@@ -11,6 +11,7 @@ import math
 
 import pandas as pd
 
+from backend.api._helpers import _err_msg
 from backend.database import BacktestRun as DBRun
 from backend.database import SessionLocal
 from backend.models.backtest_config import BacktestConfig
@@ -407,7 +408,7 @@ def run_backtest_sync(
                     clean[k] = str(v)
             stats = clean
         except Exception as e:
-            stats = {"error": str(e), "cagr": 0.0, "max_drawdown": 0.0}
+            stats = {"error": _err_msg(e), "cagr": 0.0, "max_drawdown": 0.0}
         try:
             tx = bt_obj.strategy.get_transactions()
             if isinstance(tx, pd.DataFrame) and not tx.empty:
@@ -446,12 +447,13 @@ def run_backtest_sync(
             db.close()
         return bt_obj
     except Exception as e:
-        _set_progress(run_id, {"progress": 1.0, "done": True, "error": str(e)})
+        safe = _err_msg(e)
+        _set_progress(run_id, {"progress": 1.0, "done": True, "error": safe})
         db = SessionLocal()
         try:
             row = db.query(DBRun).filter(DBRun.id == run_id).first()
             if row:
-                row.stats_json = {"error": str(e)}  # type: ignore[assignment]
+                row.stats_json = {"error": safe}  # type: ignore[assignment]
                 db.commit()
         finally:
             db.close()
