@@ -11,6 +11,7 @@ export type BuilderBacktestConfig = {
   start: string | null
   end: string | null
   price_column: 'close' | 'adj_close'
+  benchmark_ticker: string
 }
 
 export type StoredPreset = {
@@ -41,18 +42,21 @@ export function loadStoredPreset(): StoredPreset | null {
     const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(BUILDER_PRESET_KEY) : null
     if (!raw) return null
     const p = JSON.parse(raw) as Partial<StoredPreset>
+    const cfg = (p.backtestConfig ?? {}) as Partial<BuilderBacktestConfig>
     return {
       tickerStart: (p.tickerStart as string | null) ?? getOneYearAgo(),
       tickerEnd: (p.tickerEnd as string | null) ?? getToday(),
       extraSourceIds: (p.extraSourceIds as Record<string, number>) ?? {},
       indicatorSourceIds: (p.indicatorSourceIds as number[]) ?? [],
-      backtestConfig: p.backtestConfig ?? {
-        initial_capital: loadSettings().initial_capital,
-        integer_positions: loadSettings().integer_positions,
-        simple_fn: loadSettings().simple_fn,
-        start: getOneYearAgo(),
-        end: getToday(),
-        price_column: loadSettings().price_column,
+      backtestConfig: {
+        initial_capital: cfg.initial_capital ?? loadSettings().initial_capital,
+        integer_positions: cfg.integer_positions ?? loadSettings().integer_positions,
+        simple_fn: cfg.simple_fn ?? loadSettings().simple_fn,
+        start: cfg.start ?? getOneYearAgo(),
+        end: cfg.end ?? getToday(),
+        price_column: cfg.price_column ?? loadSettings().price_column,
+        // ponytail: backfill per preset salvati prima del benchmark
+        benchmark_ticker: (cfg.benchmark_ticker ?? 'SPY').toUpperCase() || 'SPY',
       },
       selectedId: (p.selectedId as string | null) ?? null,
       showIndicators: Boolean(p.showIndicators),
@@ -85,6 +89,7 @@ export function defaultPreset(): StoredPreset {
       start: getOneYearAgo(),
       end: getToday(),
       price_column: loadSettings().price_column,
+      benchmark_ticker: 'SPY',
     },
     selectedId: null,
     showIndicators: false,
@@ -107,6 +112,7 @@ export function buildPresetForTree(get: () => BtStore): Record<string, unknown> 
       commission: { type: 'simple', simple_fn: s.backtestConfig.simple_fn || null },
       start: s.backtestConfig.start,
       end: s.backtestConfig.end,
+      benchmark_ticker: s.backtestConfig.benchmark_ticker || 'SPY',
     },
     selected_node_id: s.selectedId,
   }

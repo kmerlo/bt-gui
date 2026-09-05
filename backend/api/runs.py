@@ -173,6 +173,47 @@ def list_runs(  # noqa: B008
     return {"data": out, "total": total, "limit": limit, "offset": offset}
 
 
+def _run_config(row: DBRun) -> dict:
+    return row.config_json if isinstance(row.config_json, dict) else {}
+
+
+def _strategy_equity(row: DBRun):  # type: ignore[no-untyped-def]
+    """Equity series of a run from prices_parquet (price column), or None."""
+    if row.prices_parquet is None:
+        return None
+    try:
+        df = _blob_to_df(row.prices_parquet)
+        if df.empty:
+            return None
+        df = df.copy()
+        df.index = pd.to_datetime(df.index)
+        col = "price" if "price" in df.columns else df.columns[0]
+        s = pd.to_numeric(df[col], errors="coerce").dropna()
+        return s if not s.empty else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _benchmark_for_run(row: DBRun, override: str | None = None) -> tuple[str | None, object, dict | None]:
+    """Return (ticker, aligned equity series, stats) — all None-safe, never raises."""
+    from backend.services.benchmark import align_benchmark_to_index, compute_benchmark_stats, load_benchmark_series, normalize_ticker
+
+    cfg = _run_config(row)
+    ticker = normalize_ticker(override) or normalize_ticker(cfg.get("benchmark_ticker"))
+    if ticker is None:
+        return None, None, None
+    strat = _strategy_equity(row)
+    if strat is None:
+        return ticker, None, None
+    try:
+        bench = load_benchmark_series(ticker, str(strat.index.min())[:10], str(strat.index.max())[:10], cfg.get("price_column", "close"))
+        capital = cfg.get("initial_capital") or 1000000.0
+        aligned = align_benchmark_to_index(bench, strat.index, float(capital))
+        return ticker, aligned, compute_benchmark_stats(strat, aligned)
+    except Exception:  # noqa: BLE001 — benchmark senza dati: fallback a null con hint FE
+        return ticker, None, None
+
+
 class BulkDeleteRunsRequest(BaseModel):
     ids: list[int]
 
@@ -234,6 +275,7 @@ def get_run(run_id: int, db: Session = Depends(get_db)):  # noqa: B008
             end = end or str(dfp.index.max())[:10]  # type: ignore[union-attr]
         except Exception:
             pass
+    bench_ticker, _, bench_stats = _benchmark_for_run(row)
     return {
         "id": row.id,
         "strategy_id": row.strategy_id,
@@ -245,6 +287,8 @@ def get_run(run_id: int, db: Session = Depends(get_db)):  # noqa: B008
         "end": end,
         "transactions": tx,
         "warnings": (row.stats_json or {}).get("warnings") if isinstance(row.stats_json, dict) else None,
+        "benchmark_ticker": bench_ticker,
+        "benchmark": bench_stats,
     }
 
 
@@ -255,13 +299,14 @@ def get_run_prices(
     end: str | None = Query(None),
     limit: int = Query(2000, ge=1, le=20000),
     offset: int = Query(0, ge=0),
+    benchmark_ticker: str | None = Query(None),
     db: Session = Depends(get_db),  # noqa: B008
 ):
     row = db.query(DBRun).filter(DBRun.id == run_id).first()
     if row is None:
         raise HTTPException(status_code=404, detail="not found")
     if row.prices_parquet is None:
-        return {"dates": [], "values": [], "weights": {}, "total": 0, "offset": 0, "limit": limit}
+        return {"dates": [], "values": [], "weights": {}, "benchmark": None, "total": 0, "offset": 0, "limit": limit}
     df = _blob_to_df(row.prices_parquet)
     df = df.copy()
     # filter by date range
@@ -271,6 +316,26 @@ def get_run_prices(
             df = df[df.index >= pd.to_datetime(start)]
         if end:
             df = df[df.index <= pd.to_datetime(end)]
+    # ponytail: benchmark buy&hold allineato all'index strategia, poi stessa paginazione
+    benchmark: dict | None = None
+    try:
+        from backend.services.benchmark import align_benchmark_to_index, load_benchmark_series, normalize_ticker
+
+        cfg = _run_config(row)
+        bticker = normalize_ticker(benchmark_ticker) or normalize_ticker(cfg.get("benchmark_ticker"))
+        if bticker is not None and not df.empty:
+            df.index = pd.to_datetime(df.index)
+            bench = load_benchmark_series(bticker, str(df.index.min())[:10], str(df.index.max())[:10], cfg.get("price_column", "close"))
+            capital = cfg.get("initial_capital") or 1000000.0
+            aligned = align_benchmark_to_index(bench, df.index, float(capital))
+            bpage = aligned.iloc[offset : offset + limit]
+            benchmark = {
+                "ticker": bticker,
+                "dates": [str(i) for i in bpage.index],
+                "values": [None if pd.isna(v) else float(v) for v in bpage.tolist()],
+            }
+    except Exception:  # noqa: BLE001 — benchmark senza dati: grafico solo strategia
+        benchmark = None
     total = len(df)
     page = df.iloc[offset : offset + limit]
     dates = [str(i) for i in page.index]
@@ -280,9 +345,9 @@ def get_run_prices(
         for c in page.columns:
             if c != "price":
                 weights[c] = page[c].tolist()
-        return {"dates": dates, "values": values, "weights": weights, "total": total, "offset": offset, "limit": limit}
+        return {"dates": dates, "values": values, "weights": weights, "benchmark": benchmark, "total": total, "offset": offset, "limit": limit}
     first = page.columns[0]
-    return {"dates": dates, "values": page[first].tolist(), "weights": {}, "total": total, "offset": offset, "limit": limit}
+    return {"dates": dates, "values": page[first].tolist(), "weights": {}, "benchmark": benchmark, "total": total, "offset": offset, "limit": limit}
 
 
 @router.websocket("/backtest/{run_id}/progress")

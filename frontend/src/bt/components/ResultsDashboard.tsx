@@ -6,6 +6,7 @@ import { useCompareCharts } from '../../hooks/useCompareCharts'
 import { loadSettings } from '../../api/settings'
 import RunsTable from './RunsTable'
 import MetricsPanel from './MetricsPanel'
+import BenchmarkPanel from './BenchmarkPanel'
 import TransactionsTable from './TransactionsTable'
 
 const S = {
@@ -22,7 +23,7 @@ const S = {
 export default function ResultsDashboard({ runId }: { runId: number | null }) {
   const t = useRunsTable()
   const d = useRunDetail(runId)
-  const charts = useEquityCharts(d.prices)
+  const charts = useEquityCharts(d.prices, d.benchmark)
   const wCharts = useWeightsChart(d.weights)
   const cmp = useCompareCharts()
 
@@ -63,7 +64,13 @@ export default function ResultsDashboard({ runId }: { runId: number | null }) {
       {!d.sel && t.runs.length > 0 && <div style={{ color: '#8b949e', fontSize: 13 }}>seleziona un run dalla tabella per vedere i dettagli</div>}
       {d.sel && (
         <>
-          <div style={S.card}><div style={{ fontWeight: 700, marginBottom: 8 }}>Equity Curve {d.sel ? `#${d.sel}` : ''}</div><div ref={charts.chartRef} style={{ width: '100%', height: 260 }} /></div>
+          <div style={S.card}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>
+              Equity Curve {d.sel ? `#${d.sel}` : ''}
+              {d.benchmarkTicker && <span style={{ fontWeight: 400, fontSize: 12, color: '#8b949e' }}> · <span style={{ color: '#58a6ff' }}>● strategia</span> · <span style={{ color: '#d29922' }}>● {d.benchmarkTicker} buy&amp;hold</span></span>}
+            </div>
+            <div ref={charts.chartRef} style={{ width: '100%', height: 260 }} />
+          </div>
           <div style={S.card}><div style={{ fontWeight: 700, marginBottom: 8 }}>Drawdown (%)</div><div ref={charts.ddRef} style={{ width: '100%', height: 160 }} /></div>
           <div style={S.card}>
             <div style={{ fontWeight: 700, marginBottom: 8 }}>Weights (%) {d.weights ? `· ${Object.keys(d.weights.series).length} serie` : ''}</div>
@@ -94,6 +101,7 @@ export default function ResultsDashboard({ runId }: { runId: number | null }) {
             ) : <div style={{ fontSize: 12, color: '#8b949e' }}>Nessun dato pesi per questo run (strategia single-asset o run vecchio senza weights_parquet).</div>}
           </div>
           {d.stats && <MetricsPanel stats={d.stats} />}
+          <BenchmarkPanel ticker={d.benchmarkTicker} stats={d.benchmarkStats} />
           {d.tx.length > 0 && <TransactionsTable tx={d.tx} settings={loadSettings()} />}
         </>
       )}

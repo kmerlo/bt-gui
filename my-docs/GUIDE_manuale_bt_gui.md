@@ -16,6 +16,7 @@ bt-gui ha 5 viste (sidebar hash routing `App.tsx`): **Builder**, **Results**, **
 - **Canvas** centrale: albero con drag `@dnd-kit`, reorder, selezione.
 - **Inspector** a destra: modifica `name`, `type`, `params`; se `Strategy` mostra **Algo Stack** (add/remove/reorder, form auto da `GET /api/bt/algos/{name}/schema`).
 - **Commission simple_fn**: campo `lambda q,p: q*p*0.001` con validazione regex FE e whitelist AST BE (`backend/services/commission_parser.py` permette `max/min/abs/round` e aritmetica). Lascia vuoto per nessuna commissione.
+- **Benchmark ticker (buy&hold)**: campo nel box Run Backtest, default `SPY`. Comprato a inizio strategia e tenuto fino alla fine — serve da confronto. Vuoto = nessun benchmark. Il ticker deve avere dati in Ticker Catalog (stesso `price_column` della strategia), altrimenti il pannello benchmark mostra "nessun dato".
 - **Save/Load**: toolbar `Save` persiste su `strategies` (SQLite), `Save as new` duplica; load da dropdown.
 - **Ticker Catalog**: i Security `name` devono corrispondere a ticker in `price_data` (upper-case, es. `AAPL`).
 
@@ -23,7 +24,8 @@ bt-gui ha 5 viste (sidebar hash routing `App.tsx`): **Builder**, **Results**, **
 
 - **RunsTable** (`ResultsDashboard`): sticky header, sort `cagr/total_return/max_drawdown/sharpe/sortino`, filtri colonna, bulk delete, pagination.
 - Seleziona un run → pannelli:
-  - **Equity curve** (`lightweight-charts` LineSeries)
+  - **Equity curve** (`lightweight-charts` LineSeries) — linea blu strategia + linea arancione tratteggiata benchmark buy&hold (se impostato), stessa scala
+  - **Benchmark** — tabella confronto: Total Return/CAGR/MaxDD del bench, Outperformance (strat − bench), Alpha/Beta/Correlation, Tracking error, Information ratio
   - **Weights** heatmap/table
   - **Metrics** tabella da `Result.stats`
   - **Transactions** tabella paginata

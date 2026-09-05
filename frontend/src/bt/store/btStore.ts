@@ -101,6 +101,7 @@ export const useBtStore = create<BtStore>((set, get) => ({
         start: (cfg.start as string | null) ?? tickerStart,
         end: (cfg.end as string | null) ?? tickerEnd,
         price_column: loadSettings().price_column,
+        benchmark_ticker: ((cfg.benchmark_ticker as string) ?? get().backtestConfig.benchmark_ticker ?? 'SPY').toUpperCase() || 'SPY',
       }
       const selectedId = (raw.selected_node_id as string | null) ?? null
       const next: Partial<BtStore> = {

@@ -1,12 +1,13 @@
 import { useEffect, useRef } from 'react'
-import { createChart, LineSeries, AreaSeries } from 'lightweight-charts'
+import { createChart, LineSeries, AreaSeries, LineStyle } from 'lightweight-charts'
 import type { IChartApi, ISeriesApi, MouseEventParams, Time } from 'lightweight-charts'
+import type { BenchmarkEquity } from '../api/bt'
 
 function toTime(s: string): number {
   const t = Date.parse(s)
   return Number.isNaN(t) ? 0 : Math.floor(t / 1000)
 }
-function sanitizeLine(dates: string[], values: number[]) {
+function sanitizeLine(dates: string[], values: (number | null | undefined)[]) {
   const out: { time: number; value: number }[] = []
   for (let i = 0; i < dates.length; i++) {
     const v = values[i]
@@ -30,7 +31,7 @@ function buildDrawdown(values: number[], dates: string[]) {
   return out
 }
 
-export function useEquityCharts(prices: { dates: string[]; values: number[] } | null) {
+export function useEquityCharts(prices: { dates: string[]; values: number[] } | null, benchmark?: BenchmarkEquity | null) {
   const chartRef = useRef<HTMLDivElement | null>(null)
   const ddRef = useRef<HTMLDivElement | null>(null)
 
@@ -40,12 +41,17 @@ export function useEquityCharts(prices: { dates: string[]; values: number[] } | 
     const ddEl = ddRef.current
     const eqChart: IChartApi = createChart(eqEl, { layout: { background: { color: '#0d1117' }, textColor: '#c9d1d9' }, width: eqEl.clientWidth, height: 260, grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } } })
     const ddChart: IChartApi = createChart(ddEl, { layout: { background: { color: '#0d1117' }, textColor: '#c9d1d9' }, width: ddEl.clientWidth, height: 160, grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } } })
-    const eqSeries: ISeriesApi<'Line'> = eqChart.addSeries(LineSeries, { color: '#58a6ff', lineWidth: 2 })
+    const eqSeries: ISeriesApi<'Line'> = eqChart.addSeries(LineSeries, { color: '#58a6ff', lineWidth: 2, title: 'strategy' })
     const ddSeries: ISeriesApi<'Area'> = ddChart.addSeries(AreaSeries, { lineColor: '#f85149', topColor: 'rgba(248,81,73,0.4)', bottomColor: 'rgba(248,81,73,0.0)' })
     const eqData = sanitizeLine(prices.dates, prices.values)
     const ddData = buildDrawdown(prices.values, prices.dates)
     eqSeries.setData(eqData as never)
     ddSeries.setData(ddData as never)
+    // ponytail: benchmark buy&hold come seconda linea, stessa scala
+    if (benchmark && benchmark.values.length > 0) {
+      const bSeries = eqChart.addSeries(LineSeries, { color: '#d29922', lineWidth: 2, lineStyle: LineStyle.Dashed, title: benchmark.ticker })
+      bSeries.setData(sanitizeLine(benchmark.dates, benchmark.values) as never)
+    }
     eqChart.timeScale().fitContent()
     ddChart.timeScale().fitContent()
     const eqMap = new Map<number, number>(eqData.map((d) => [d.time, d.value]))
@@ -101,7 +107,7 @@ export function useEquityCharts(prices: { dates: string[]; values: number[] } | 
       eqChart.remove()
       ddChart.remove()
     }
-  }, [prices])
+  }, [prices, benchmark])
 
   return { chartRef, ddRef }
 }

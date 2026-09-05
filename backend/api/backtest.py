@@ -23,6 +23,7 @@ class RunRequest(BaseModel):
     tree: StrategyTree | None = None
     config: BacktestConfig = BacktestConfig()  # type: ignore[call-arg]
     tickers: list[str] = []
+    benchmark_ticker: str | None = None
     price_source_id: int | None = None
     extra_source_ids: dict[str, int] = {}
     indicator_source_ids: list[int] = []
@@ -49,6 +50,10 @@ def create_backtest(req: RunRequest, db: Session = Depends(get_db)):  # noqa: B0
         cfg_dict["strategy_name"] = tree.name
     cfg_dict["start"] = req.config.start
     cfg_dict["end"] = req.config.end
+    # ponytail: benchmark buy&hold salvato in config, mai 422 se mancano i dati (fallback a null in lettura)
+    from backend.services.benchmark import normalize_ticker
+
+    cfg_dict["benchmark_ticker"] = normalize_ticker(req.benchmark_ticker)
 
     row = DBRun(strategy_id=strategy_id, config_json=cfg_dict, stats_json=None)
     db.add(row)

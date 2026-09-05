@@ -38,6 +38,7 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
   const capital = backtestConfig.initial_capital
   const integerPos = backtestConfig.integer_positions
   const simpleFn = backtestConfig.simple_fn
+  const benchmarkTicker = backtestConfig.benchmark_ticker ?? 'SPY'
 
   const refreshTickers = useCallback(async () => {
     try {
@@ -207,6 +208,7 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
         tree,
         config,
         tickers: selectedTickers,
+        benchmark_ticker: benchmarkTicker.trim().toUpperCase() || null,
         extra_source_ids: extraSourceIds,
         indicator_source_ids: referencedIds,
       })
@@ -286,6 +288,14 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
       <DateInputIT value={tickerStart ?? ''} onChange={setTickerStart} style={S.input} />
       <label style={{ ...S.label, marginTop: 8 }}>End date</label>
       <DateInputIT value={tickerEnd ?? ''} onChange={setTickerEnd} style={S.input} />
+      <label style={{ ...S.label, marginTop: 8 }}>Benchmark ticker (buy&amp;hold)</label>
+      <input
+        style={{ ...S.input, textTransform: 'uppercase' }}
+        value={benchmarkTicker}
+        onChange={(e) => setBacktestConfig({ benchmark_ticker: e.target.value.toUpperCase() })}
+        placeholder="SPY"
+        title="Comprato a inizio strategia e tenuto buy&hold — linea di confronto sull'equity. Vuoto = nessun benchmark."
+      />
       <label style={{ ...S.label, marginTop: 8 }}>Initial capital</label>
       <input style={S.input} type="number" value={capital} onChange={(e) => setBacktestConfig({ initial_capital: Number(e.target.value) })} />
       <label style={{ ...S.label, marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
