@@ -128,13 +128,26 @@ def evaluate_expression(
         return price_df < ind
 
     if op in ("cross_over", "cross_down"):
-        ind = resolve_value(expr["left"], indicators, price_df)
-        if isinstance(ind, pd.DataFrame):
-            ind = _normalize_indicator_cols(ind, price_df)
-        # ponytail: ind may be DataFrame after normalization
-        if isinstance(ind, pd.DataFrame):
-            return ind > ind.shift(1) if op == "cross_over" else ind < ind.shift(1)  # type: ignore[operator]
-        return ind > ind.shift(1) if op == "cross_over" else ind < ind.shift(1)  # type: ignore[attr-defined]
+        left = resolve_value(expr["left"], indicators, price_df)
+        if isinstance(left, pd.DataFrame):
+            left = _normalize_indicator_cols(left, price_df)
+        right_expr = expr.get("right")
+        if right_expr is None:
+            # back-compat: FE sends left-only cross (SignalPanel.tsx) — rising/falling momentum form
+            if isinstance(left, pd.DataFrame):
+                return left > left.shift(1) if op == "cross_over" else left < left.shift(1)  # type: ignore[operator]
+            return left > left.shift(1) if op == "cross_over" else left < left.shift(1)  # type: ignore[attr-defined]
+        right = resolve_value(right_expr, indicators, price_df)
+        if isinstance(right, pd.DataFrame):
+            right = _normalize_indicator_cols(right, price_df)
+        if isinstance(left, pd.DataFrame) and isinstance(right, pd.DataFrame):
+            left, right = left.align(right, join="outer")
+        # ponytail: value leaves are scalars without shift — compare against the constant
+        left_prev = left.shift(1) if hasattr(left, "shift") else left  # type: ignore[attr-defined]
+        right_prev = right.shift(1) if hasattr(right, "shift") else right  # type: ignore[attr-defined]
+        if op == "cross_over":
+            return (left > right) & (left_prev <= right_prev)  # type: ignore[operator]
+        return (left < right) & (left_prev >= right_prev)  # type: ignore[operator]
 
     if op == "and":
         return (

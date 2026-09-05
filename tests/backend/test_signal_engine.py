@@ -107,6 +107,103 @@ class TestCrossOverCrossDown:
         assert result.to_dict() == {"A": {0: False, 1: True, 2: True, 3: True, 4: True}}
 
 
+class TestTwoOperandCross:
+    def test_cross_over_two_operand(self):
+        indicators = {
+            "fast": pd.DataFrame({"A": [1.0, 2.0, 4.0, 5.0, 6.0]}),
+            "slow": pd.DataFrame({"A": [3.0, 3.0, 3.0, 3.0, 3.0]}),
+        }
+        price = pd.DataFrame({"A": [1.0, 1.0, 1.0, 1.0, 1.0]})
+        result = evaluate_expression(
+            {"op": "cross_over", "left": {"type": "indicator", "id": "fast"}, "right": {"type": "indicator", "id": "slow"}},
+            indicators,
+            price,
+        )
+        # True exactly on the crossing bar (idx 2: 4>3 and 2<=3)
+        assert result.to_dict() == {"A": {0: False, 1: False, 2: True, 3: False, 4: False}}
+
+    def test_cross_down_two_operand(self):
+        indicators = {
+            "fast": pd.DataFrame({"A": [5.0, 4.0, 2.0, 1.0, 0.0]}),
+            "slow": pd.DataFrame({"A": [3.0, 3.0, 3.0, 3.0, 3.0]}),
+        }
+        price = pd.DataFrame({"A": [1.0, 1.0, 1.0, 1.0, 1.0]})
+        result = evaluate_expression(
+            {"op": "cross_down", "left": {"type": "indicator", "id": "fast"}, "right": {"type": "indicator", "id": "slow"}},
+            indicators,
+            price,
+        )
+        # True exactly on the crossing bar (idx 2: 2<3 and 4>=3)
+        assert result.to_dict() == {"A": {0: False, 1: False, 2: True, 3: False, 4: False}}
+
+    def test_cross_over_misaligned_columns_and_index(self):
+        price = pd.DataFrame({"A": [1.0] * 5, "B": [1.0] * 5})
+        indicators = {
+            # reversed columns + shuffled index (values keyed by label) — must align, not crash
+            "fast": pd.DataFrame({"B": [2.0, 3.0, 4.0, 5.0, 6.0], "A": [6.0, 5.0, 4.0, 2.0, 1.0]}, index=[4, 3, 2, 1, 0]),
+            "slow": pd.DataFrame({"A": [3.0] * 5, "B": [3.0] * 5}),
+        }
+        result = evaluate_expression(
+            {"op": "cross_over", "left": {"type": "indicator", "id": "fast"}, "right": {"type": "indicator", "id": "slow"}},
+            indicators,
+            price,
+        )
+        assert result.to_dict() == {
+            "A": {0: False, 1: False, 2: True, 3: False, 4: False},
+            "B": {0: False, 1: False, 2: False, 3: False, 4: False},
+        }
+
+    def test_cross_over_scalar_threshold(self):
+        indicators = {"fast": pd.DataFrame({"A": [1.0, 2.0, 4.0, 5.0, 6.0]})}
+        price = pd.DataFrame({"A": [1.0, 1.0, 1.0, 1.0, 1.0]})
+        result = evaluate_expression(
+            {"op": "cross_over", "left": {"type": "indicator", "id": "fast"}, "right": {"type": "value", "v": 3.0}},
+            indicators,
+            price,
+        )
+        assert result.to_dict() == {"A": {0: False, 1: False, 2: True, 3: False, 4: False}}
+
+    def test_cross_single_operand_legacy_preserved(self, sample_indicators, sample_price):
+        # no `right` key (FE SignalPanel shape) → legacy rising/falling momentum form
+        result = evaluate_expression(
+            {"op": "cross_over", "left": {"type": "indicator", "id": "1"}},
+            sample_indicators,
+            sample_price,
+        )
+        assert result.to_dict() == {"A": {0: False, 1: True, 2: True, 3: True, 4: True}}
+
+
+class TestBoolFastPath:
+    def test_bool_frame_bypasses_condition(self):
+        from backend.models.strategy_tree import AlgoConfig
+        from backend.services.tree_serializer import _resolve_indicator_params
+
+        price = pd.DataFrame({"A": [1.0, 2.0, 3.0]})
+        bool_df = pd.DataFrame({"A": [True, False, True]})
+        # condition None would apply .notna() → all True if NOT bypassed
+        cfg = AlgoConfig(class_name="SelectWhere", params={"signal": "1"}, signal_condition=None)
+        out = _resolve_indicator_params(cfg, {"1": bool_df}, price)
+        pd.testing.assert_frame_equal(out["signal"], bool_df)
+
+    def test_int_frame_still_thresholded(self):
+        from backend.models.strategy_tree import AlgoConfig
+        from backend.services.tree_serializer import _resolve_indicator_params
+
+        price = pd.DataFrame({"A": [1.0, 2.0, 3.0]})
+        int_df = pd.DataFrame({"A": [1, -2, 3]})
+        cfg = AlgoConfig(class_name="SelectWhere", params={"signal": "1"}, signal_condition={"op": "gt", "value": 0})
+        out = _resolve_indicator_params(cfg, {"1": int_df}, price)
+        assert out["signal"].to_dict() == {"A": {0: True, 1: False, 2: True}}
+
+    def test_gt_threshold_unchanged(self):
+        from backend.services.tree_serializer import _apply_signal_condition
+
+        df = pd.DataFrame({"A": [1, -2, 3]})
+        price = pd.DataFrame({"A": [1.0, 2.0, 3.0]})
+        out = _apply_signal_condition(df, {"op": "gt", "value": 0}, price)
+        assert out.to_dict() == {"A": {0: True, 1: False, 2: True}}
+
+
 class TestAndOrNot:
     def test_and(self, sample_indicators):
         result = evaluate_expression(

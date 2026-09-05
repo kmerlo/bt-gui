@@ -70,7 +70,7 @@ def _resolve_indicator_params(algo_cfg: Any, indicators: dict[str, pd.DataFrame]
                     # Signals are already boolean — skip condition application.
                     # WeighTarget needs raw weight DataFrames, never apply conditions.
                     if algo_cfg.class_name != "WeighTarget":
-                        if not df.dtypes.apply(lambda t: t is bool).all():
+                        if not df.dtypes.apply(pd.api.types.is_bool_dtype).all():
                             condition = getattr(algo_cfg, "signal_condition", None)
                             df = _apply_signal_condition(df, condition, price_df)
                     params[k] = df
