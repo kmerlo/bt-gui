@@ -160,19 +160,29 @@ class TestStateClearing:
 
 
 class TestBlockedDay:
-    def _entered(self, dates_prices):
+    def _entered(self, dates_prices, weights=None):
         univ = make_universe(list(dates_prices[0]), dates_prices[1])
         algo = sl_only(stop_loss_long=0.1)
-        drive(algo, univ, {"AAA": 1.0, "BBB": 1.0}, D0)
+        drive(algo, univ, weights or {"AAA": 1.0, "BBB": 1.0}, D0)
         return algo, univ
 
-    def test_blocked_day_breach_exits_whole_portfolio(self):
-        # plan-026 will change this to per-ticker exit
+    def test_blocked_day_breach_exits_only_breached_ticker(self):
         algo, univ = self._entered(( [D0, D1], {"AAA": [100.0, 89.0], "BBB": [100.0, 101.0]}))
         t = StubTarget(univ, pd.Timestamp(D1))  # w is None: RunMonthly-blocked day
         assert algo(t) is True
-        assert t.temp["weights"] == {}
+        assert t.temp["weights"] == {"BBB": 1.0}
         assert "AAA" not in algo._entry
+        assert algo._entry == {"BBB": 100.0}
+
+    def test_blocked_day_double_breach_keeps_survivor(self):
+        algo, univ = self._entered(
+            ([D0, D1], {"AAA": [100.0, 89.0], "BBB": [100.0, 89.0], "CCC": [100.0, 101.0]}),
+            {"AAA": 0.4, "BBB": 0.4, "CCC": 0.2},
+        )
+        t = StubTarget(univ, pd.Timestamp(D1))
+        assert algo(t) is True
+        assert t.temp["weights"] == {"CCC": 0.2}
+        assert set(algo._entry) == {"CCC"}
 
     def test_blocked_day_no_breach_leaves_weights_missing(self):
         algo, univ = self._entered(([D0, D1], {"AAA": [100.0, 101.0], "BBB": [100.0, 102.0]}))
@@ -180,6 +190,36 @@ class TestBlockedDay:
         assert algo(t) is True
         assert "weights" not in t.temp
         assert set(algo._entry) == {"AAA", "BBB"}
+
+
+class TestDirectionFlip:
+    def test_long_to_short_resets_entry(self):
+        univ = make_universe([D0, D1, D2], {"AAA": [100.0, 101.0, 95.5]})
+        algo = sl_only(stop_loss_long=0.1, take_profit_short=0.05)
+        drive(algo, univ, {"AAA": 1.0}, D0)
+        t = drive(algo, univ, {"AAA": -1.0}, D1)  # flip
+        assert t.temp["weights"] == {"AAA": -1.0}
+        assert algo._entry == {"AAA": 101.0}
+        assert algo._trail_high == {}
+        assert algo._trail_low == {"AAA": 101.0}
+        # short TP from flip price: 101*0.95=95.95 -> 95.5 exits; stale entry 100 -> tp 95.0 -> would hold
+        t = drive(algo, univ, {"AAA": -1.0}, D2)
+        assert t.temp["weights"] == {}
+        assert algo._entry == {}
+
+    def test_short_to_long_resets_entry(self):
+        univ = make_universe([D0, D1, D2], {"AAA": [100.0, 99.0, 149.0]})
+        algo = sl_only(stop_loss_short=0.03, take_profit_long=0.5)
+        drive(algo, univ, {"AAA": -1.0}, D0)
+        t = drive(algo, univ, {"AAA": 1.0}, D1)  # flip
+        assert t.temp["weights"] == {"AAA": 1.0}
+        assert algo._entry == {"AAA": 99.0}
+        assert algo._trail_low == {}
+        assert algo._trail_high == {"AAA": 99.0}
+        # long TP from flip price: 99*1.5=148.5 -> 149 exits; stale entry 100 -> tp 150 -> would hold
+        t = drive(algo, univ, {"AAA": 1.0}, D2)
+        assert t.temp["weights"] == {}
+        assert algo._entry == {}
 
 
 G0, G1, G2 = "2026-01-28", "2026-01-29", "2026-02-02"  # G2 is a monthly period start

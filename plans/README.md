@@ -223,7 +223,7 @@ All HIGH-confidence findings vetted against live code before planning.
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
 | 025 | Characterization tests for custom_algos SL/TP + EntryGate | P1 | M | — | ✅ DONE (2026-09-05, 22 tests, ruff+144 tests ok) |
-| 026 | Fix SL/TP blocked-day liquidation + stale entry on flip | P1 | M | 025 | TODO |
+| 026 | Fix SL/TP blocked-day liquidation + stale entry on flip | P1 | M | 025 | ✅ DONE (2026-09-05, per-ticker exit + flip reset, 25 tests) |
 | 027 | Fix cross_over/down two-operand semantics + bool fast-path | P1 | M | — | TODO |
 | 028 | WS progress auth + sanitize persisted/streamed errors | P1 | S | — | TODO |
 | 029 | Ghost-row fix + SQL-side filtering/pagination in list_runs | P1 | M | — | TODO |

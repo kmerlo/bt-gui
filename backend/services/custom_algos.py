@@ -54,6 +54,8 @@ class StopLossTakeProfit(Algo):
         self._entry: dict[str, float] = {}
         self._trail_high: dict[str, float] = {}
         self._trail_low: dict[str, float] = {}
+        # ponytail: plan-026 — last weights per ticker (upper key), so blocked-day exits can keep survivors at carried weights
+        self._carry: dict[str, float] = {}
 
     def __call__(self, target):
         w = target.temp.get("weights")
@@ -74,6 +76,7 @@ class StopLossTakeProfit(Algo):
             except Exception:
                 return True
             # check each active entry for breach even though no new weights
+            forced = False
             for ticker in list(self._entry.keys()):
                 price = price_dict.get(ticker)
                 if price is None or price == 0 or pd.isna(price):
@@ -90,14 +93,14 @@ class StopLossTakeProfit(Algo):
                         if float(price) <= sl_price:
                             self._entry.pop(ticker, None)
                             self._trail_high.pop(ticker, None)
-                            target.temp["weights"] = {}
+                            forced = True
                             continue
                         if self.take_profit_long and self.take_profit_long > 0:
                             tp_price = entry * (1 + self.take_profit_long)
                             if float(price) >= tp_price:
                                 self._entry.pop(ticker, None)
                                 self._trail_high.pop(ticker, None)
-                                target.temp["weights"] = {}
+                                forced = True
                                 continue
                     else:
                         if self.stop_loss_long and self.stop_loss_long > 0:
@@ -105,14 +108,14 @@ class StopLossTakeProfit(Algo):
                             if float(price) <= sl_price:
                                 self._entry.pop(ticker, None)
                                 self._trail_high.pop(ticker, None)
-                                target.temp["weights"] = {}
+                                forced = True
                                 continue
                         if self.take_profit_long and self.take_profit_long > 0:
                             tp_price = entry * (1 + self.take_profit_long)
                             if float(price) >= tp_price:
                                 self._entry.pop(ticker, None)
                                 self._trail_high.pop(ticker, None)
-                                target.temp["weights"] = {}
+                                forced = True
                                 continue
                 else:
                     if self.trailing_short and self.trailing_short > 0:
@@ -123,14 +126,14 @@ class StopLossTakeProfit(Algo):
                         if float(price) >= sl_price:
                             self._entry.pop(ticker, None)
                             self._trail_low.pop(ticker, None)
-                            target.temp["weights"] = {}
+                            forced = True
                             continue
                         if self.take_profit_short and self.take_profit_short > 0:
                             tp_price = entry * (1 - self.take_profit_short)
                             if float(price) <= tp_price:
                                 self._entry.pop(ticker, None)
                                 self._trail_low.pop(ticker, None)
-                                target.temp["weights"] = {}
+                                forced = True
                                 continue
                     else:
                         if self.stop_loss_short and self.stop_loss_short > 0:
@@ -138,19 +141,18 @@ class StopLossTakeProfit(Algo):
                             if float(price) >= sl_price:
                                 self._entry.pop(ticker, None)
                                 self._trail_low.pop(ticker, None)
-                                target.temp["weights"] = {}
+                                forced = True
                                 continue
                         if self.take_profit_short and self.take_profit_short > 0:
                             tp_price = entry * (1 - self.take_profit_short)
                             if float(price) <= tp_price:
                                 self._entry.pop(ticker, None)
                                 self._trail_low.pop(ticker, None)
-                                target.temp["weights"] = {}
+                                forced = True
                                 continue
-            # if we forced an exit, ensure weights is set so RebalanceAlways can act
-            if "weights" not in target.temp or target.temp["weights"] is None:
-                # no forced exit, leave weights missing -> Rebalance won't run, which is correct for non-entry days
-                pass
+            # ponytail: plan-026 per-ticker exit — survivors keep carried weights so Rebalance closes only breached tickers; no exit -> weights missing so Rebalance won't run
+            if forced:
+                target.temp["weights"] = {t: self._carry[t] for t in self._entry}
             return True
         # normalise to dict
         if isinstance(w, pd.Series):
@@ -168,6 +170,7 @@ class StopLossTakeProfit(Algo):
             self._entry.clear()
             self._trail_high.clear()
             self._trail_low.clear()
+            self._carry.clear()
             target.temp["weights"] = w
             return True
 
@@ -210,6 +213,18 @@ class StopLossTakeProfit(Algo):
 
             if ticker not in self._entry:
                 # new entry
+                self._entry[ticker] = float(price)
+                if is_long:
+                    self._trail_high[ticker] = float(price)
+                    self._trail_low.pop(ticker, None)
+                else:
+                    self._trail_low[ticker] = float(price)
+                    self._trail_high.pop(ticker, None)
+                new_weights[ticker_raw] = weight
+                continue
+
+            # ponytail: plan-026 flip — long<->short must not reuse stale entry/trail (misprices SL/TP); treat as new entry at flip price
+            if is_long != (ticker in self._trail_high):
                 self._entry[ticker] = float(price)
                 if is_long:
                     self._trail_high[ticker] = float(price)
@@ -289,6 +304,9 @@ class StopLossTakeProfit(Algo):
                 self._entry.pop(t, None)
                 self._trail_high.pop(t, None)
                 self._trail_low.pop(t, None)
+
+        # ponytail: plan-026 — rebuild carried weights from survivors (breached/deselected/zero drop out via _entry/new_weights)
+        self._carry = {str(k).upper(): float(v) for k, v in new_weights.items() if str(k).upper() in self._entry}
 
         # write back preserving original type
         if is_series:
