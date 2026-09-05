@@ -45,12 +45,12 @@ def test_stats_no_overlap():
     assert all(v is None for v in stats.values())
 
 
-def test_align_scales_to_capital():
+def test_align_scales_to_strategy_base():
     idx = pd.date_range("2020-01-02", periods=5, freq="B")
     bench = pd.Series([10.0, 11.0, 12.0, 11.5, 13.0], index=idx)
-    aligned = align_benchmark_to_index(bench, idx, 100000.0)
-    assert aligned.iloc[0] == 100000.0
-    assert aligned.iloc[-1] == 130000.0
+    aligned = align_benchmark_to_index(bench, idx, 100.0)
+    assert aligned.iloc[0] == 100.0
+    assert aligned.iloc[-1] == 130.0
 
 
 def _seed_benchmark_prices():
@@ -70,7 +70,8 @@ def _seed_benchmark_prices():
 def _seed_run(idx) -> int:
     db = SessionLocal()
     try:
-        equity = pd.Series(100000.0 + pd.Series(range(len(idx))).values * 100.0, index=idx)
+        # ponytail: bt stores equity normalized (base 100), not at initial_capital — mirror real runs
+        equity = pd.Series(100.0 + pd.Series(range(len(idx))).values * 0.1, index=idx)
         pdf = pd.DataFrame({"price": equity})
         cfg = {"strategy_name": "tmp_bm", "benchmark_ticker": "tmp_bm_spy", "initial_capital": 100000.0, "price_column": "close"}
         row = DBRun(strategy_id=None, config_json=cfg, stats_json={}, prices_parquet=_df_to_blob(pdf))
@@ -111,7 +112,8 @@ def test_api_run_and_prices_benchmark():
         assert p["benchmark"] is not None
         assert p["benchmark"]["ticker"] == SYM
         assert len(p["benchmark"]["values"]) == len(p["dates"])
-        assert p["benchmark"]["values"][0] == 100000.0
+        # benchmark must share the strategy scale (base 100), not initial_capital
+        assert p["benchmark"]["values"][0] == 100.0
     finally:
         _cleanup(run_id)
 

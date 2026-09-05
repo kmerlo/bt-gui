@@ -207,8 +207,10 @@ def _benchmark_for_run(row: DBRun, override: str | None = None) -> tuple[str | N
         return ticker, None, None
     try:
         bench = load_benchmark_series(ticker, str(strat.index.min())[:10], str(strat.index.max())[:10], cfg.get("price_column", "close"))
-        capital = cfg.get("initial_capital") or 1000000.0
-        aligned = align_benchmark_to_index(bench, strat.index, float(capital))
+        scale = float(strat.iloc[0])
+        if not scale:
+            return ticker, None, None
+        aligned = align_benchmark_to_index(bench, strat.index, scale)
         return ticker, aligned, compute_benchmark_stats(strat, aligned)
     except Exception:  # noqa: BLE001 — benchmark senza dati: fallback a null con hint FE
         return ticker, None, None
@@ -326,8 +328,10 @@ def get_run_prices(
         if bticker is not None and not df.empty:
             df.index = pd.to_datetime(df.index)
             bench = load_benchmark_series(bticker, str(df.index.min())[:10], str(df.index.max())[:10], cfg.get("price_column", "close"))
-            capital = cfg.get("initial_capital") or 1000000.0
-            aligned = align_benchmark_to_index(bench, df.index, float(capital))
+            scol = "price" if "price" in df.columns else df.columns[0]
+            svals = pd.to_numeric(df[scol], errors="coerce").dropna()
+            if not svals.empty and float(svals.iloc[0]):
+                aligned = align_benchmark_to_index(bench, df.index, float(svals.iloc[0]))
             bpage = aligned.iloc[offset : offset + limit]
             benchmark = {
                 "ticker": bticker,

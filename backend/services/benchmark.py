@@ -40,9 +40,13 @@ def load_benchmark_series(
 def align_benchmark_to_index(
     bench: pd.Series,
     idx: pd.DatetimeIndex,
-    initial_capital: float,
+    scale_to: float,
 ) -> pd.Series:
-    """Reindex benchmark to the strategy index (ffill) and scale to initial_capital buy&hold."""
+    """Reindex benchmark to the strategy index (ffill) and scale buy&hold to start at scale_to.
+
+    scale_to must be the strategy's first equity value: bt stores equity normalized
+    (base 100), NOT at initial_capital — scaling to capital would squash the strategy flat.
+    """
     b = bench.copy()
     b.index = pd.to_datetime(b.index)
     idx = pd.to_datetime(idx)
@@ -50,7 +54,7 @@ def align_benchmark_to_index(
     first = b[b.notna()]
     if first.empty:
         return pd.Series(float("nan"), index=idx)
-    return (b / float(first.iloc[0]) * initial_capital).rename("benchmark")
+    return (b / float(first.iloc[0]) * scale_to).rename("benchmark")
 
 
 def _clean(v: float) -> float | None:
