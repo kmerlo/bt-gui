@@ -8,6 +8,8 @@ export type BtSettings = {
   lang: 'it' | 'en'
   data_adapter: 'ffn' | 'yfinance'
   price_source: 'local' | 'market'
+  tx_group_bg_color: string
+  tx_group_bg_opacity: number
 }
 export const defaultSettings: BtSettings = {
   initial_capital: 100000,
@@ -18,6 +20,8 @@ export const defaultSettings: BtSettings = {
   lang: 'it',
   data_adapter: 'ffn',
   price_source: 'local',
+  tx_group_bg_color: '#161b22',
+  tx_group_bg_opacity: 0.15,
 }
 export function loadSettings(): BtSettings {
   try {

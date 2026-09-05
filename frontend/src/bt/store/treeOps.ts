@@ -70,3 +70,17 @@ export function insertAtRec(
   }
   return { ...node, children: node.children.map((c) => insertAtRec(c, parentId, child, index)) }
 }
+
+export function cloneWithNewIds(node: NodeConfig): NodeConfig {
+  return {
+    ...node,
+    id: uid(),
+    params: { ...(node.params as Record<string, unknown>) },
+    algos: node.algos.map((a) => ({
+      ...a,
+      params: { ...(a.params as Record<string, unknown>) },
+      signal_condition: a.signal_condition ? { ...(a.signal_condition as Record<string, unknown>) } : a.signal_condition,
+    })),
+    children: node.children.map(cloneWithNewIds),
+  }
+}

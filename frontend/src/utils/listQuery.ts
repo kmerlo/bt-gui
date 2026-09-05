@@ -12,6 +12,9 @@ export function applySort<T>(rows: T[], sortBy: string | null, sortDir: 'asc' | 
     if (av == null && bv == null) return 0
     if (av == null) return 1 * dir
     if (bv == null) return -1 * dir
+    const avNum = typeof av === 'number'
+    const bvNum = typeof bv === 'number'
+    if (avNum && bvNum) return (av - bv) * dir
     return String(av).localeCompare(String(bv)) * dir
   })
 }

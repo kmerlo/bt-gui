@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { StrategyTree, NodeConfig } from '../../types/bt'
 import { loadStoredPreset, saveStoredPreset, defaultPreset } from './preset'
 import type { BuilderBacktestConfig } from './preset'
-import { findNode, updateNodeRec, addChildRec, removeRec, insertAtRec } from './treeOps'
+import { findNode, findParent, updateNodeRec, addChildRec, removeRec, insertAtRec, cloneWithNewIds } from './treeOps'
 import { loadSettings } from '../../api/settings'
 
 function uid(): string {
@@ -42,10 +42,19 @@ export type BtStore = {
   addChild: (parentId: string, node: NodeConfig) => void
   removeNode: (id: string) => void
   moveNode: (id: string, newParentId: string, index: number) => void
+  duplicateNode: (id: string) => void
 }
 
 const _stored = loadStoredPreset()
 const _defPreset = defaultPreset()
+const _globalPriceCol = loadSettings().price_column
+if (_stored && _stored.backtestConfig.price_column !== _globalPriceCol) {
+  _stored.backtestConfig = { ..._stored.backtestConfig, price_column: _globalPriceCol }
+  saveStoredPreset(_stored)
+}
+if (_defPreset.backtestConfig.price_column !== _globalPriceCol) {
+  _defPreset.backtestConfig = { ..._defPreset.backtestConfig, price_column: _globalPriceCol }
+}
 const _init = _stored ?? _defPreset
 
 function persist(get: () => BtStore): void {
@@ -91,7 +100,7 @@ export const useBtStore = create<BtStore>((set, get) => ({
         simple_fn: (commission.simple_fn as string) ?? get().backtestConfig.simple_fn ?? '',
         start: (cfg.start as string | null) ?? tickerStart,
         end: (cfg.end as string | null) ?? tickerEnd,
-        price_column: (cfg.price_column as 'close' | 'adj_close') ?? loadSettings().price_column,
+        price_column: loadSettings().price_column,
       }
       const selectedId = (raw.selected_node_id as string | null) ?? null
       const next: Partial<BtStore> = {
@@ -189,6 +198,19 @@ export const useBtStore = create<BtStore>((set, get) => ({
     if (findNode(moving, newParentId)) return
     const root = insertAtRec(without, newParentId, moving, index)
     set({ tree: { ...tree, root } })
+  },
+  duplicateNode: (id) => {
+    const { tree } = get()
+    if (!tree) return
+    if (tree.root.id === id) return
+    const node = findNode(tree.root, id)
+    const parent = findParent(tree.root, id)
+    if (!node || !parent || !parent.id) return
+    const clone = cloneWithNewIds(node)
+    clone.name = `${node.name}_copy`
+    const idx = parent.children.findIndex((c) => c.id === id)
+    const root = insertAtRec(tree.root, parent.id, clone, idx + 1)
+    set({ tree: { ...tree, root }, selectedId: clone.id ?? null })
   },
 }))
 

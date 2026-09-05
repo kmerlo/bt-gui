@@ -412,4 +412,6 @@ Copia questa sezione e consegnala al tuo LLM all'inizio di una sessione di svilu
 12. **MAI cancellare righe utente in bt_gui.db** — vedi §11. Per test usa solo prefissi test_/tmp_/mock_ e sqlite:///:memory:.
 
 13. **Ponytail di default: soluzione più corta che funziona** — marca scorciatoie con `// ponytail:` e verifica con `npm run build` / `pytest` prima di dichiarare done (AGENTS.md:99-101).
+
+14. **Script manuali di verifica → SEMPRE `set_active_db("test")`**. Ogni volta che esegui `uv run python -c "..."` per testare un endpoint o un servizio, il DB di default è `bt_gui.db` (produzione). Prima di qualsiasi write/delete/insert, chiama `from backend.database import set_active_db; set_active_db("test")`. I test pytest sono già isolati da `conftest.py`. [GUIDE-CODING_PRACTICES.md]
 ```

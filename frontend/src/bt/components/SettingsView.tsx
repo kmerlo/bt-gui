@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { btApi, strategiesApi, backtestApi, dbApi, loadSettings, saveSettings, defaultSettings, type BtSettings, type DbInfo } from '../../api/bt'
 import { priceSourceApi } from '../../api/settings'
+import { useBtStore } from '../store/btStore'
 
 const S = {
   wrap: { padding: 12, color: '#c9d1d9' } as const,
@@ -87,6 +88,7 @@ export default function SettingsView() {
       // validazione completa al salvataggio (BE)
     }
     saveSettings(settings)
+    useBtStore.getState().setBacktestConfig({ price_column: settings.price_column })
     setSaveMsg('salvato')
     setTimeout(() => setSaveMsg(''), 2000)
   }
@@ -94,6 +96,7 @@ export default function SettingsView() {
   const handleResetDefaults = () => {
     setSettings(defaultSettings)
     saveSettings(defaultSettings)
+    useBtStore.getState().setBacktestConfig({ price_column: defaultSettings.price_column })
     setSaveMsg('ripristinati default')
   }
 
@@ -245,6 +248,18 @@ export default function SettingsView() {
             <option value="en">English</option>
           </select>
         </div>
+        <div style={S.row}>
+          <span style={S.label}>Colore sfondo gruppi tx</span>
+          <input type="color" value={settings.tx_group_bg_color} onChange={(e) => setSettings({ ...settings, tx_group_bg_color: e.target.value })} style={{ width: 36, height: 28, padding: 0, cursor: 'pointer', background: 'transparent', border: '1px solid #30363d', borderRadius: 4 }} />
+        </div>
+        <div style={S.row}>
+          <span style={S.label}>Opacità sfondo gruppi tx</span>
+          <input type="range" min={0} max={1} step={0.01} value={settings.tx_group_bg_opacity} onChange={(e) => setSettings({ ...settings, tx_group_bg_opacity: Number(e.target.value) })} style={{ flex: 1, maxWidth: 200 }} />
+          <span style={{ fontSize: 11, color: '#8b949e', minWidth: 32 }}>{settings.tx_group_bg_opacity}</span>
+        </div>
+        <div style={S.row}>
+          <button type="button" style={S.btnPri} onClick={handleSave}>Salva</button>
+        </div>
       </div>
 
       {/* Sorgente dati */}
@@ -255,6 +270,7 @@ export default function SettingsView() {
           <select style={S.input} value={settings.price_column} onChange={(e) => {
             const v = e.target.value as 'close' | 'adj_close'
             setSettings({ ...settings, price_column: v })
+            useBtStore.getState().setBacktestConfig({ price_column: v })
           }}>
             <option value="adj_close">Adj Close</option>
             <option value="close">Close</option>

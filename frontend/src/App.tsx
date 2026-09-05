@@ -104,6 +104,7 @@ export default function App() {
   const handleRunCreated = (id: number) => {
     setRunId(id)
     setView('results')
+    window.location.hash = 'results'
   }
 
   const NAV_ITEMS: { id: View; label: string }[] = [

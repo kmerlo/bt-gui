@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useBtStore, findNode } from '../store/btStore'
 import AlgoStack from './AlgoStack'
 import DateInputIT from './DateInputIT'
@@ -45,6 +45,7 @@ export default function NodeInspector() {
   const selectedId = useBtStore((s) => s.selectedId)
   const updateNode = useBtStore((s) => s.updateNode)
   const removeNode = useBtStore((s) => s.removeNode)
+  const duplicateNode = useBtStore((s) => s.duplicateNode)
   const tickerStart = useBtStore((s) => s.tickerStart)
   const tickerEnd = useBtStore((s) => s.tickerEnd)
   const setTickerStart = useBtStore((s) => s.setTickerStart)
@@ -55,12 +56,20 @@ export default function NodeInspector() {
   const [nameDraft, setNameDraft] = useState('')
   const [paramsDraft, setParamsDraft] = useState('')
   const [paramsErr, setParamsErr] = useState('')
+  const nameInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (node) {
       setNameDraft(node.name)
       setParamsDraft(JSON.stringify(node.params ?? {}, null, 2))
       setParamsErr('')
+    }
+  }, [node?.id, node?.name]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (node?.name.endsWith('_copy')) {
+      nameInputRef.current?.focus()
+      nameInputRef.current?.select()
     }
   }, [node?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -94,8 +103,11 @@ export default function NodeInspector() {
 
   const commitName = () => {
     const v = nameDraft.trim()
-    if (!v || v === node.name || !node.id) return
-    updateNode(node.id!, { name: v })
+    if (!v || !selectedId) return
+    // ponytail: read fresh node from store to avoid stale closure after duplicate
+    const fresh = tree && selectedId ? findNode(tree.root, selectedId) : null
+    if (!fresh || v === fresh.name) return
+    updateNode(selectedId, { name: v })
   }
 
   const commitParams = () => {
@@ -111,28 +123,76 @@ export default function NodeInspector() {
 
   const isRoot = tree.root.id === node.id
 
+  const canSaveName = (() => {
+    const v = nameDraft.trim()
+    return Boolean(v && selectedId && tree && findNode(tree.root, selectedId)?.name !== v)
+  })()
+
   return (
     <div style={S.wrap}>
-      <div style={S.title}>Inspector</div>
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        <span style={S.badge}>{node.type}</span>
-        <span style={S.label}>id {(node.id ?? '').slice(0, 8)}</span>
-      </div>
+      <div
+        style={{
+          position: 'sticky' as const,
+          top: 0,
+          zIndex: 1,
+          background: '#0d1117',
+          paddingBottom: 8,
+          margin: '-12px -12px 0',
+          padding: '12px 12px 8px',
+          borderBottom: '1px solid #21262d',
+          display: 'flex',
+          flexDirection: 'column' as const,
+          gap: 10,
+        }}
+      >
+        <div style={S.title}>Inspector</div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span style={S.badge}>{node.type}</span>
+          <span style={S.label}>id {(node.id ?? '').slice(0, 8)}</span>
+        </div>
 
-      <div style={{ overflowX: 'hidden' }}>
-        <span style={S.label}>name {node.type === 'Security' ? '(ticker = name)' : ''}</span>
-        <input
-          value={nameDraft}
-          onChange={(e) => setNameDraft(e.target.value)}
-          onBlur={commitName}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') commitName()
-          }}
-          style={S.input}
-        />
-      </div>
+        <div style={{ overflowX: 'hidden' }}>
+          <span style={S.label}>name {node.type === 'Security' ? '(ticker = name)' : ''}</span>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input
+              ref={nameInputRef}
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onBlur={commitName}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitName()
+              }}
+              style={{ ...S.input, flex: 1, minWidth: 0 }}
+            />
+            <button
+              type="button"
+              onClick={commitName}
+              disabled={!canSaveName}
+              title={canSaveName ? 'Salva nome' : 'nessuna modifica'}
+              style={{
+                background: canSaveName ? '#238636' : '#21262d',
+                color: canSaveName ? '#fff' : '#8b949e',
+                border: '1px solid #30363d',
+                borderRadius: 6,
+                padding: '6px 10px',
+                cursor: canSaveName ? 'pointer' : 'default',
+                opacity: canSaveName ? 1 : 0.6,
+                whiteSpace: 'nowrap' as const,
+                flexShrink: 0,
+              }}
+            >
+              Salva nome
+            </button>
+          </div>
+          <span style={{ fontSize: 11, color: '#8b949e' }}>Invio, click fuori o Salva nome</span>
+        </div>
 
-      <div style={S.label}>type — cambio tipo non consentito v1 (ricrea il nodo)</div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' as const }}>
+          <span style={S.label}>type</span>
+          <span style={{ ...S.badge, opacity: 0.6 }}>{node.type} · sola lettura v1</span>
+          <span style={{ fontSize: 11, color: '#8b949e' }}>per cambiare tipo: ricrea il nodo da palette</span>
+        </div>
+      </div>
 
       <div style={{ overflowX: 'hidden' }}>
         <span style={S.label}>params (JSON)</span>
@@ -206,13 +266,22 @@ export default function NodeInspector() {
       </div>
 
       {!isRoot && node.id && (
-        <button
-          onClick={() => removeNode(node.id!)}
-          type="button"
-          style={{ marginTop: 8, background: '#21262d', color: '#f85149', border: '1px solid #30363d', borderRadius: 6, padding: '6px 8px', cursor: 'pointer' }}
-        >
-          Remove node
-        </button>
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <button
+            onClick={() => duplicateNode(node.id!)}
+            type="button"
+            style={{ flex: 1, background: '#21262d', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, padding: '6px 8px', cursor: 'pointer' }}
+          >
+            ⧉ Duplica
+          </button>
+          <button
+            onClick={() => removeNode(node.id!)}
+            type="button"
+            style={{ flex: 1, background: '#21262d', color: '#f85149', border: '1px solid #30363d', borderRadius: 6, padding: '6px 8px', cursor: 'pointer' }}
+          >
+            Remove node
+          </button>
+        </div>
       )}
     </div>
   )

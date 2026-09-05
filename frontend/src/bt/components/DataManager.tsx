@@ -78,6 +78,7 @@ export default function DataManager({ onNavigate }: { onNavigate?: (symbol: stri
     setMsg(results.join('\n'))
     setSymbolInput('')
     refresh()
+    window.dispatchEvent(new Event('bt-price-refresh'))
   }
 
   const handleDelete = async (symbol: string) => {
@@ -89,6 +90,7 @@ export default function DataManager({ onNavigate }: { onNavigate?: (symbol: stri
       setRowCache((c) => { const n = { ...c }; delete n[symbol]; return n })
       setExpanded((s) => { const n = new Set(s); n.delete(symbol); return n })
       refresh()
+      window.dispatchEvent(new Event('bt-price-refresh'))
     } catch (e) {
       setMsg(`[err] ${String(e)}`)
     }

@@ -1,8 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
 
-from backend.database import DataSource as DBSource, init_db, SessionLocal
+from backend.database import DataSource as DBSource, SessionLocal
 from backend.main import app
 
 
@@ -28,7 +27,6 @@ class TestListSignals:
         assert r.json() == []
 
     def test_after_compute(self, client, db_session):
-        from backend.database import PriceData as DBPriceData
         # Need price data for the symbols
         # We'll use a symbol that exists in the test DB or skip if not available
         r = client.post("/api/bt/signals/compute", json={

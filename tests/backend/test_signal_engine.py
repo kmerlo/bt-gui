@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 
-from backend.services.signal_engine import evaluate_expression, resolve_value
+from backend.services.signal_engine import evaluate_expression
 
 
 @pytest.fixture

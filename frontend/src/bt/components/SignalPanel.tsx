@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { dataApi, priceDataApi, type DataSourceRow } from '../../api/bt'
 import { useBtStore } from '../store/btStore'
 import { collectTickers } from '../utils/collectTickers'
+import Tooltip from './Tooltip'
 
 const S = {
   wrap: {
@@ -61,14 +62,38 @@ export default function SignalPanel() {
   const [nameDraft, setNameDraft] = useState('')
   const [msg, setMsg] = useState('')
   const [computing, setComputing] = useState(false)
+  const [weightMsg, setWeightMsg] = useState('')
+  const [weightComputing, setWeightComputing] = useState(false)
+  const [fastIndId, setFastIndId] = useState<string>('')
+  const [slowIndId, setSlowIndId] = useState<string>('')
+  const [weightNameDraft, setWeightNameDraft] = useState('')
+  const [weightMode, setWeightMode] = useState<'1/-1' | '1/0'>('1/-1')
+  const initDone = useRef(false)
+
+  const refreshIndicators = () => {
+    dataApi.listIndicators().then(setIndicators).catch(() => { /* ignore */ })
+  }
 
   useEffect(() => {
     priceDataApi.list().then((rows) => setAvailableTickers(rows.map((r) => r.symbol))).catch(() => { /* ignore */ })
     dataApi.listIndicators().then(setIndicators).catch(() => { /* ignore */ })
     dataApi.listSignals().then(setSignals).catch(() => { /* ignore */ })
+    window.addEventListener('bt-indicator-refresh', refreshIndicators)
+    return () => window.removeEventListener('bt-indicator-refresh', refreshIndicators)
   }, [])
 
+  // Auto-select all strategy tickers on first data load — runs exactly once per tree
   const treeTickers = tree ? collectTickers(tree.root) : []
+  const defaultSelected = treeTickers.filter((t) => availableTickers.includes(t))
+  useEffect(() => {
+    initDone.current = false
+  }, [tree])
+  useEffect(() => {
+    if (!initDone.current && defaultSelected.length > 0) {
+      initDone.current = true
+      setSelectedTickers(defaultSelected)
+    }
+  }, [defaultSelected, tree])
   const hasData = treeTickers.some((t) => availableTickers.includes(t))
 
   const toggleTicker = (sym: string) => {
@@ -192,6 +217,65 @@ export default function SignalPanel() {
       </button>
 
       {msg && <span style={S.err}>{msg}</span>}
+
+      {/* ── Weight Signal section ── */}
+      <div style={{ borderTop: '1px solid #21262d', margin: '4px 0' }} />
+      <Tooltip
+        trigger={<div style={{ ...S.title, fontSize: 11, color: '#f0883e' }}>Weight Signal (WeighTarget) ⓘ</div>}
+        content="Confronta due indicatori per generare pesi. Modo '1/-1': +1 quando Indicatore1 > Indicatore2, -1 altrimenti (crossover long/short). Modo '1/0': +1 quando Indicatore1 > Indicatore2, 0 altrimenti (long-only). NaN sull'indicatore lento → 0."
+      />
+      <div style={{ fontSize: 11, color: '#8b949e' }}>Crea un segnale di peso confrontando due indicatori.</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={S.row}>
+          <select value={fastIndId} onChange={(e) => setFastIndId(e.target.value)} style={{ ...S.select, flex: 1 }}>
+            <option value="">Indicatore 1</option>
+            {indicators.map((ind) => (
+              <option key={ind.id} value={String(ind.id)}>#{ind.id} {ind.name}</option>
+            ))}
+          </select>
+          <select value={slowIndId} onChange={(e) => setSlowIndId(e.target.value)} style={{ ...S.select, flex: 1 }}>
+            <option value="">Indicatore 2</option>
+            {indicators.map((ind) => (
+              <option key={ind.id} value={String(ind.id)}>#{ind.id} {ind.name}</option>
+            ))}
+          </select>
+        </div>
+        <div style={S.row}>
+          <span style={{ ...S.label, fontSize: 11 }}>Modalità:</span>
+          <select value={weightMode} onChange={(e) => setWeightMode(e.target.value as '1/-1' | '1/0')} style={{ ...S.select, flex: 1, minWidth: 90 }}>
+            <option value="1/-1">1 / -1 (long/short)</option>
+            <option value="1/0">1 / 0 (long-only)</option>
+          </select>
+        </div>
+        <input value={weightNameDraft} onChange={(e) => setWeightNameDraft(e.target.value)} placeholder={(() => { const ind1 = indicators.find(i => String(i.id) === fastIndId); const ind2 = indicators.find(i => String(i.id) === slowIndId); return `auto: weight_${(ind1?.name ?? 'ind1')}_${(ind2?.name ?? 'ind2')}`; })()} style={S.input} />
+        <button type="button" style={weightComputing ? S.btnDis : S.btn} onClick={async () => {
+          if (!fastIndId || !slowIndId) { setWeightMsg('select both indicators'); return }
+          if (selectedTickers.length === 0) { setWeightMsg('select at least one ticker'); return }
+          setWeightComputing(true); setWeightMsg('');
+          const ind1 = indicators.find(i => String(i.id) === fastIndId);
+          const ind2 = indicators.find(i => String(i.id) === slowIndId);
+          const modeSuffix = weightMode === '1/0' ? '-long_only' : '-long/short';
+          const autoName = ind1 && ind2 ? `weight-${ind1.name}-${ind2.name}${modeSuffix}` : undefined;
+          try {
+            const r = await dataApi.computeWeightSignal({
+              name: weightNameDraft.trim() || autoName,
+              fast_indicator_id: Number(fastIndId),
+              slow_indicator_id: Number(slowIndId),
+              symbols: selectedTickers,
+              start: tickerStart || undefined,
+              end: tickerEnd || undefined,
+              mode: weightMode,
+            });
+            setWeightMsg(`saved weight signal #${r.id}: ${r.name}`);
+            setSignals((prev) => [{ id: r.id, name: r.name, type: 'signal', source: 'computed_weight', meta: r.meta, path_or_tickers: selectedTickers.join(',') }, ...prev]);
+            window.dispatchEvent(new Event('bt-indicator-refresh'));
+          } catch (e) { setWeightMsg(String(e)); }
+          finally { setWeightComputing(false); }
+        }} disabled={weightComputing}>
+          {weightComputing ? 'Computing…' : 'Compute Weight Signal'}
+        </button>
+      </div>
+      {weightMsg && <span style={S.err}>{weightMsg}</span>}
 
       {signals.length > 0 && (
         <>

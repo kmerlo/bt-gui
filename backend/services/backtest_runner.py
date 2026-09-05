@@ -50,6 +50,40 @@ def _load_prices_from_db(
     return _load_prices_from_local(tickers, start, end, price_column)
 
 
+def _pivot_price_rows(rows: list, price_column: str) -> pd.DataFrame:
+    """Pivot flat rows (symbol/date/close) to wide DataFrame — robust to duplicate dates."""
+    if not rows:
+        return pd.DataFrame()
+    flat = pd.DataFrame(
+        [
+            {
+                "date": r.date,
+                "symbol": r.symbol.upper(),
+                "close": getattr(r, price_column) if price_column != "close" else r.close,
+            }
+            for r in rows
+        ]
+    )
+    wide = flat.pivot(index="date", columns="symbol", values="close").sort_index()
+    wide.columns = [str(c).upper() for c in wide.columns]
+    # ffill for holidays/weekends, bfill for leading NaN (first date may have NaN for one ticker due to insert order)
+    wide = wide.ffill().bfill()
+    return wide
+
+
+def _sanitize_price_df(df: pd.DataFrame) -> pd.DataFrame:
+    """Ensure price_df has no NaN/zero that bt would treat as price=0."""
+    if df.empty:
+        return df
+    df = df.copy()
+    df.index = pd.to_datetime(df.index)
+    df = df.sort_index()
+    df.columns = [str(c).upper() for c in df.columns]
+    # drop fully-empty rows, then fill
+    df = df.dropna(how="all").ffill().bfill()
+    return df
+
+
 def _load_prices_from_local(
     tickers: list[str],
     start: str | None,
@@ -74,22 +108,24 @@ def _load_prices_from_local(
         if not rows:
             raise ValueError(f"No price data found for tickers {tickers}")
 
-        df = pd.DataFrame(
-            [
-                {
-                    "date": r.date,
-                    r.symbol.upper(): getattr(r, price_column) if price_column != "close" else r.close,
-                }
-                for r in rows
-            ]
-        )
-        df = df.set_index("date").sort_index()
-        # ensure column names are upper
-        df.columns = [str(c).upper() for c in df.columns]
-        # resolve duplicate dates (one row per ticker per date) keeping first non-null per column
-        df = df.groupby(df.index).first()
-        # fill forward missing values (weekends/holidays)
-        df = df.ffill()
+        df = _pivot_price_rows(rows, price_column)
+        df = _sanitize_price_df(df)
+        # ponytail: fail fast if a requested ticker column is completely missing (price is 0 in bt)
+        missing = sorted(set(t.upper() for t in tickers) - set(str(c).upper() for c in df.columns))
+        if missing:
+            raise ValueError(
+                f"price data missing columns {missing} for range {start}->{end} "
+                f"(price_column={price_column}). Fetch {missing} in Ticker Catalog. Available: {sorted(str(c) for c in df.columns)}"
+            )
+        if (df == 0).any().any():
+            zero_cols = [str(c) for c in df.columns if (df[c] == 0).any()]
+            zero_dates = df.index[(df == 0).any(axis=1)].tolist()[:3]
+            raise ValueError(
+                f"price_df zero in {zero_cols} at {zero_dates} — "
+                f"bt price=0 (col={price_column} {start}->{end})"
+            )
+        if df.isna().any().any():
+            raise ValueError(f"price_df still has NaN after sanitize: {df.isna().sum().to_dict()}")
         return df
     finally:
         db.close()
@@ -123,20 +159,52 @@ def _load_prices_from_market(
         if not rows:
             raise ValueError(f"No price data found for tickers {tickers}")
 
-        df = pd.DataFrame(
-            [
-                {
-                    "date": r.date,
-                    r.symbol.upper(): getattr(r, price_column) if price_column != "close" else r.close,
-                }
-                for r in rows
-            ]
-        )
-        df = df.set_index("date").sort_index()
-        df.columns = [str(c).upper() for c in df.columns]
-        df = df.groupby(df.index).first()
-        df = df.ffill()
-        return df
+        # rows are Row tuples: (symbol, date, open, high, low, close, adj_close, volume)
+        flat = []
+        for r in rows:
+            try:
+                # support both Row object attribute access and tuple indexing
+                sym = getattr(r, "symbol", None) if hasattr(r, "symbol") else r[0]
+                d = getattr(r, "date", None) if hasattr(r, "date") else r[1]
+                if sym is None:
+                    sym = r[0]  # type: ignore[index]
+                if d is None:
+                    d = r[1]  # type: ignore[index]
+                if price_column == "close":
+                    val = getattr(r, "close", None) if hasattr(r, "close") else r[5]  # type: ignore[index]
+                    if val is None:
+                        val = r[5]  # type: ignore[index]
+                else:
+                    val = getattr(r, price_column, None) if hasattr(r, price_column) else None
+                    if val is None:
+                        # fallback: map column name to tuple index
+                        col_map = {"open": 2, "high": 3, "low": 4, "close": 5, "adj_close": 6, "volume": 7}
+                        idx = col_map.get(price_column, 5)
+                        val = r[idx]  # type: ignore[index]
+                flat.append({"date": d, "symbol": str(sym).upper(), "close": val})
+            except Exception:
+                continue
+        wide = pd.DataFrame(flat).pivot(index="date", columns="symbol", values="close").sort_index()
+        wide.columns = [str(c).upper() for c in wide.columns]
+        wide = wide.ffill().bfill()
+        wide = _sanitize_price_df(wide)
+        # ponytail: fail fast if a requested ticker column is missing
+        missing = sorted(set(t.upper() for t in tickers) - set(str(c).upper() for c in wide.columns))
+        if missing:
+            raise ValueError(
+                f"price data missing columns {missing} for range {start}->{end} "
+                f"(price_column={price_column}). Fetch {missing} in Ticker Catalog. Available: {sorted(str(c) for c in wide.columns)}"
+            )
+        if (wide == 0).any().any():
+            zero_cols = [str(c) for c in wide.columns if (wide[c] == 0).any()]
+            zero_dates = wide.index[(wide == 0).any(axis=1)].tolist()[:3]
+            raise ValueError(
+                f"price_df zero in {zero_cols} at {zero_dates} — "
+                f"bt price=0 (col={price_column} {start}->{end})"
+            )
+        if wide.isna().any().any():
+            raise ValueError(f"price_df still has NaN after sanitize: {wide.isna().sum().to_dict()}")
+        return wide
     finally:
         conn.close()
 
@@ -208,6 +276,13 @@ def run_backtest_sync(
     try:
         # ponytail: normalize all DataFrame columns to upper case so ffn lower-case does not mismatch Strategy names (AAPL)
         price_df = _norm_columns(price_df)  # type: ignore[assignment]
+        price_df = _sanitize_price_df(price_df)  # type: ignore[arg-type]
+        if price_df is not None and not price_df.empty and price_df.isna().any().any():
+            raise ValueError(f"price_df has NaN after sanitize: {price_df.isna().sum().to_dict()}")
+        # fail fast if price contains zeros (bt treats 0 as missing and raises "price is 0")
+        if price_df is not None and (price_df == 0).any().any():
+            zero_cols = [c for c in price_df.columns if (price_df[c] == 0).any()]
+            raise ValueError(f"price_df contains zero values in columns {zero_cols} — bt cannot allocate on zero price")
         if additional:
             for k in list(additional.keys()):
                 additional[k] = _norm_columns(additional[k])
@@ -220,16 +295,49 @@ def run_backtest_sync(
             for iid, df in indicators.items():
                 df = _norm_columns(df)  # type: ignore[assignment]
                 if df is not None and not df.empty and member_names:
-                    # keep only columns that are actual members (intersection); if none match keep original to not hide error
                     keep = [c for c in df.columns if str(c).upper() in member_names]
                     if keep and len(keep) != len(df.columns):
                         try:
                             df = df[keep]
                         except Exception:
                             pass
+                    elif not keep and len(df.columns) == 1 and member_names:
+                        # ponytail: legacy single-col signal like 'ROC_252'/'SMA_5' — broadcast/rename to member ticker(s)
+                        # (fixes Trend Example 2 before signal_engine fix)
+                        single = str(df.columns[0])
+                        if single.upper() not in member_names:
+                            base = df.iloc[:, 0]
+                            if len(member_names) == 1:
+                                df = pd.DataFrame({next(iter(member_names)): base}, index=df.index)
+                            else:
+                                df = pd.DataFrame({m: base for m in member_names}, index=df.index)
+                # align to price_df index to avoid bt reading price 0 on missing dates; ffill holds last weight, leading NaN -> 0
+                if df is not None and not df.empty and price_df is not None and not price_df.empty:
+                    try:
+                        df.index = pd.to_datetime(df.index)
+                        price_idx = pd.to_datetime(price_df.index)
+                        # reindex to price index, keep original values where available
+                        aligned = df.reindex(price_idx)
+                        # forward-fill holds last signal, leading NaNs become 0 (no allocation before SMA valid)
+                        aligned = aligned.ffill().fillna(0)
+                        # ensure columns stay upper and sorted as price_df
+                        aligned.columns = [str(c).upper() for c in aligned.columns]
+                        df = aligned
+                    except Exception:
+                        pass
                 normed[iid] = df  # type: ignore[assignment]
             indicators = normed
         tree = _normalize_tree(tree)
+        # ponytail: fail fast if strategy needs tickers not in price_df (e.g. RunDialog stale selection)
+        if member_names and price_df is not None and not price_df.empty:
+            price_cols = set(str(c).upper() for c in price_df.columns)
+            missing = sorted(member_names - price_cols)
+            if missing:
+                raise ValueError(
+                    f"price_df manca colonne richieste dalla strategia: {missing}. "
+                    f"Tree tickers: {sorted(member_names)}, price tickers: {sorted(price_cols)}. "
+                    f"Fetch {missing} in Ticker Catalog e premi ↻ in Run Backtest per ricaricare."
+                )
         strategy = to_bt_strategy(tree, indicators or {}, price_df)
         commissions = _build_commission(cfg)
         bt_obj = bt.Backtest(

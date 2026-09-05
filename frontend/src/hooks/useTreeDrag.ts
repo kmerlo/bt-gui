@@ -74,15 +74,21 @@ export function useTreeDrag() {
     const activeParent = findParent(tree.root, activeId)
     const overParent = findParent(tree.root, overId)
 
+    const isOverStrat = overNode.type === 'Strategy' || overNode.type === 'FixedIncomeStrategy'
+    const isActiveStrat = activeNode.type === 'Strategy' || activeNode.type === 'FixedIncomeStrategy'
+    // ponytail: leaf->Strategy sibling must nest, not reorder; Strategy->Strategy sibling keeps reorder
+    if (isOverStrat && (!isActiveStrat || activeParent?.id !== overParent?.id)) {
+      moveNode(activeId, overNode.id!, overNode.children.length)
+      return
+    }
     if (activeParent && overParent && activeParent.id === overParent.id && activeParent.id) {
       const siblings = activeParent.children
       const oldIdx = siblings.findIndex((c) => c.id === activeId)
       const newIdx = siblings.findIndex((c) => c.id === overId)
       if (oldIdx === -1 || newIdx === -1) return
       moveNode(activeId, activeParent.id!, newIdx)
-    } else if (overNode.type === 'Strategy' || overNode.type === 'FixedIncomeStrategy') {
-      const idx = overNode.children.length
-      moveNode(activeId, overNode.id!, idx)
+    } else if (isOverStrat) {
+      moveNode(activeId, overNode.id!, overNode.children.length)
     } else if (overParent && overParent.id) {
       const newIdx = overParent.children.findIndex((c) => c.id === overId)
       moveNode(activeId, overParent.id!, newIdx === -1 ? overParent.children.length : newIdx)

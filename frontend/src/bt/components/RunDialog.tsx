@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { backtestApi, priceDataApi } from '../../api/bt'
-import { loadSettings } from '../../api/settings'
+import type { NodeConfig } from '../../types/bt'
 import { useBtStore } from '../store/btStore'
 import { collectTickers } from '../utils/collectTickers'
 import DateInputIT from './DateInputIT'
@@ -39,22 +39,36 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
   const integerPos = backtestConfig.integer_positions
   const simpleFn = backtestConfig.simple_fn
 
-  useEffect(() => {
-    priceDataApi.list().then((rows) => setAvailableTickers(rows.map((r) => r.symbol))).catch(() => { /* ignore */ })
+  const refreshTickers = useCallback(async () => {
+    try {
+      const rows = await priceDataApi.list()
+      setAvailableTickers(rows.map((r) => r.symbol))
+    } catch { /* ignore */ }
   }, [])
 
-  // Auto-select all tree tickers that have data available — runs exactly once per tree
+  useEffect(() => {
+    refreshTickers()
+    const handler = () => refreshTickers()
+    window.addEventListener('bt-price-refresh', handler)
+    return () => window.removeEventListener('bt-price-refresh', handler)
+  }, [refreshTickers])
+
+  // Auto-select all tree tickers that have data available — auto-adds new tickers as they appear
   useEffect(() => {
     initDone.current = false
   }, [tree])
   useEffect(() => {
     const ids = tree ? collectTickers(tree.root) : []
     const known = ids.filter((t) => availableTickers.includes(t))
-    if (!initDone.current && known.length > 0) {
+    if (known.length === 0) return
+    if (!initDone.current) {
       initDone.current = true
       setSelectedTickers(known)
+    } else if (known.length !== selectedTickers.length || known.some((t) => !selectedTickers.includes(t))) {
+      // ponytail: auto-select new ticker, keep order of known (user asked always all)
+      setSelectedTickers(known)
     }
-  }, [availableTickers, tree])
+  }, [availableTickers, tree, selectedTickers])
 
   useEffect(() => {
     const id = runId
@@ -96,8 +110,6 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
     }
   }, [runId])
 
-  const treeTickers = tree ? collectTickers(tree.root) : []
-
   const validateFn = (v: string) => {
     if (!v.trim()) return ''
     const ok = /^\s*lambda\s+\w+\s*,\s*\w+\s*:/.test(v)
@@ -111,10 +123,53 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
     setSelectedTickers((prev) => prev.includes(sym) ? prev.filter((t) => t !== sym) : [...prev, sym])
   }
 
+  const treeTickers = tree ? collectTickers(tree.root) : []
+  const missingTickers = treeTickers.filter((t) => !availableTickers.includes(t))
+  const coverageMismatch = treeTickers.length > 0 && selectedTickers.length !== treeTickers.length
+
   const handleRun = async () => {
     if (!tree) { setMsg('no tree'); return }
     if (selectedTickers.length === 0) { setMsg('select at least one ticker'); return }
     if (fnError) { setMsg(fnError); return }
+    if (missingTickers.length > 0) {
+      const ok = window.confirm(
+        `Dati mancanti per: ${missingTickers.join(', ')} — fetch in Ticker Catalog.\n` +
+        `Price column: ${backtestConfig.price_column === 'adj_close' ? 'Adj Close' : 'Close'} (da Settings → Sorgente dati).\n` +
+        `Continuare comunque?`
+      )
+      if (!ok) return
+    }
+    if (coverageMismatch) {
+      const ok = window.confirm(
+        `Stai per lanciare con price parziale: ${selectedTickers.length}/${treeTickers.length} ticker selezionati.\n` +
+        `Tree: ${treeTickers.join(', ')}\nPrice: ${selectedTickers.join(', ')}\n` +
+        `Price column: ${backtestConfig.price_column === 'adj_close' ? 'Adj Close' : 'Close'} (da Settings → Sorgente dati).\n` +
+        `I ticker esclusi avranno price=0 e il backtest fallirà con "Cannot allocate capital...".\n` +
+        `Vuoi continuare lo stesso?`
+      )
+      if (!ok) return
+    }
+    // ponytail: senza Rebalance i pesi Weigh* non diventano mai ordini — equity piatta senza errori dal BE
+    const missingRebalance: string[] = []
+    {
+      const walk = (n: NodeConfig) => {
+        if (n.type === 'Strategy' || n.type === 'FixedIncomeStrategy') {
+          const hasReb = (n.algos ?? []).some((a) => a.class_name.startsWith('Rebalance'))
+          if (!hasReb) missingRebalance.push(n.name)
+        }
+        for (const c of n.children ?? []) walk(c)
+      }
+      walk(tree.root)
+    }
+    if (missingRebalance.length > 0) {
+      const ok = window.confirm(
+        `Manca l'algo Rebalance in: ${missingRebalance.join(', ')}.\n` +
+        `Senza Rebalance (o RebalanceAlways/RebalanceOverTime) i pesi calcolati da Weigh* non diventano mai ordini: il backtest gira ma l'equity resta piatta.\n` +
+        `Aggiungi Rebalance come ultimo algo dello Stack.\n` +
+        `Continuare comunque?`
+      )
+      if (!ok) return
+    }
     setRunning(true)
     setProgress(0.05)
     setRunId(null)
@@ -125,7 +180,7 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
       commission: { type: 'simple', simple_fn: simpleFn || null },
       start: tickerStart,
       end: tickerEnd,
-      price_column: loadSettings().price_column,
+      price_column: backtestConfig.price_column,
     }
     const referencedIds = (() => {
       const ids = new Set<number>(indicatorSourceIds)
@@ -171,7 +226,29 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
 
   return (
     <div style={S.wrap}>
-      <div style={{ fontWeight: 700, marginBottom: 8 }}>Run Backtest</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ fontWeight: 700 }}>Run Backtest</span>
+        <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <button
+            type="button"
+            onClick={refreshTickers}
+            title="Ricarica lista ticker dal DB (dopo Fetch in Ticker Catalog)"
+            style={{ background: '#21262d', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', fontSize: 12 }}
+          >
+            ↻
+          </button>
+          <span
+            title="Impostato in Settings → Sorgente dati → Price column"
+            style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: '#21262d', border: '1px solid #30363d', color: '#8b949e' }}
+          >
+            {backtestConfig.price_column === 'adj_close' ? 'Adj Close' : 'Close'}
+          </span>
+        </span>
+      </div>
+      <div style={{ fontSize: 11, color: '#8b949e', marginBottom: 8 }}>
+        Price column: <b style={{ color: '#c9d1d9' }}>{backtestConfig.price_column === 'adj_close' ? 'Adj Close' : 'Close'}</b>
+        <span style={{ marginLeft: 6 }}>· da Settings → Sorgente dati</span>
+      </div>
       <label style={S.label}>Tickers</label>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
         {treeTickers.length === 0 && <span style={{ fontSize: 12, color: '#8b949e' }}>Nessun ticker nella strategia — aggiungi Security alla tree</span>}
@@ -195,6 +272,16 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
           </button>
         ))}
       </div>
+      {missingTickers.length > 0 && (
+        <div style={{ fontSize: 11, color: '#f85149', marginBottom: 4 }}>
+          Dati mancanti per: {missingTickers.join(', ')} — fetch in Ticker Catalog
+        </div>
+      )}
+      {coverageMismatch && (
+        <div style={{ fontSize: 11, color: '#f0c040', marginBottom: 4 }}>
+          Attenzione: price contiene {selectedTickers.length}/{treeTickers.length} ticker della tree — selezione parziale può dare price=0 su ticker esclusi
+        </div>
+      )}
       <label style={{ ...S.label, marginTop: 8 }}>Start date</label>
       <DateInputIT value={tickerStart ?? ''} onChange={setTickerStart} style={S.input} />
       <label style={{ ...S.label, marginTop: 8 }}>End date</label>

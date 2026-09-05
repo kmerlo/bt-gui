@@ -152,7 +152,7 @@ def test_sma_indicator_value():
     _insert_test_price_data(sym, periods=30)
     cr = client.post(
         "/api/bt/indicators/compute",
-        json={"symbol": sym, "type": "sma", "params": {"period": 5}, "name": f"valtest_{_uid()}"},
+        json={"symbol": sym, "type": "sma", "params": {"length": 5}, "name": f"valtest_{_uid()}"},
     )
     ind_id = cr.json()["id"]
     from backend.database import DataSource as DBSource

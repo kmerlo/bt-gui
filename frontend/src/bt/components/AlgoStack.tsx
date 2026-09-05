@@ -17,6 +17,7 @@ const S = {
   warn: { background: '#332a00', border: '1px solid #d29922', color: '#f0c040', borderRadius: 6, padding: '6px 8px', fontSize: 12 },
   input: { background: '#0d1117', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, padding: '4px 6px', width: '100%' },
   label: { fontSize: 12, color: '#8b949e', cursor: 'help' },
+  defaultBadge: { fontSize: 10, color: '#8b949e', fontStyle: 'italic' as const, opacity: 0.85 },
   handle: { cursor: 'grab', padding: '0 4px', color: '#8b949e', userSelect: 'none' as const },
   algoName: { fontSize: 13 },
   helpBtn: {
@@ -92,11 +93,22 @@ function AlgoItem({
             const val = (algo.params as Record<string, unknown>)[k]
             const t = pmeta.type
             const paramDesc = meta?.param_docs?.[k]
+            const rawDef = (pmeta as unknown as { default: unknown }).default
+            const isReq = (schema.required ?? []).includes(k)
+            const defStr = (() => {
+              if (isReq || rawDef === null || rawDef === undefined) return null
+              if (typeof rawDef === 'boolean') return rawDef ? 'True' : 'False'
+              if (typeof rawDef === 'string') {
+                if (rawDef.startsWith('<DateOffset') || rawDef.startsWith('(')) return rawDef
+                return `'${rawDef}'`
+              }
+              return String(rawDef)
+            })()
             const labelEl = (
-              <Tooltip
-                trigger={<span style={S.label}>{k}</span>}
-                content={paramDesc ?? ''}
-              />
+              <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                <Tooltip trigger={<span style={S.label}>{k}</span>} content={paramDesc ?? ''} />
+                {defStr !== null && <span style={S.defaultBadge}>default: {defStr}</span>}
+              </span>
             )
             // indicator ref → render select with available indicators
             if ((pmeta as Record<string, unknown>).kind === 'indicator') {
@@ -223,7 +235,7 @@ function AlgoItem({
       {modalDoc !== null && createPortal(
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
              onClick={() => setModalDoc(null)}>
-          <div style={{ background: '#0d1117', border: '1px solid #30363d', borderRadius: 8, padding: 16, maxWidth: 500, maxHeight: '80vh', overflowY: 'auto', width: '90%' }}
+           <div style={{ background: '#0d1117', border: '1px solid #30363d', borderRadius: 8, padding: 16, maxWidth: 1000, maxHeight: '80vh', overflowY: 'auto', width: '90%' }}
                onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: '#c9d1d9' }}>{algo.class_name} — 文档</span>

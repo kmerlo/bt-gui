@@ -1,6 +1,9 @@
 import { useRunsTable } from '../../hooks/useRunsTable'
 import { useRunDetail } from '../../hooks/useRunDetail'
 import { useEquityCharts } from '../../hooks/useEquityCharts'
+import { useWeightsChart } from '../../hooks/useWeightsChart'
+import { useCompareCharts } from '../../hooks/useCompareCharts'
+import { loadSettings } from '../../api/settings'
 import RunsTable from './RunsTable'
 import MetricsPanel from './MetricsPanel'
 import TransactionsTable from './TransactionsTable'
@@ -20,6 +23,8 @@ export default function ResultsDashboard({ runId }: { runId: number | null }) {
   const t = useRunsTable()
   const d = useRunDetail(runId)
   const charts = useEquityCharts(d.prices)
+  const wCharts = useWeightsChart(d.weights)
+  const cmp = useCompareCharts()
 
   const handleDeleteOne = async (id: number) => {
     const ok = await t.handleDeleteOne(id)
@@ -60,10 +65,61 @@ export default function ResultsDashboard({ runId }: { runId: number | null }) {
         <>
           <div style={S.card}><div style={{ fontWeight: 700, marginBottom: 8 }}>Equity Curve {d.sel ? `#${d.sel}` : ''}</div><div ref={charts.chartRef} style={{ width: '100%', height: 260 }} /></div>
           <div style={S.card}><div style={{ fontWeight: 700, marginBottom: 8 }}>Drawdown (%)</div><div ref={charts.ddRef} style={{ width: '100%', height: 160 }} /></div>
+          <div style={S.card}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Weights (%) {d.weights ? `· ${Object.keys(d.weights.series).length} serie` : ''}</div>
+            {d.weights ? (
+              <>
+                <div ref={wCharts.ref} style={{ width: '100%', height: 200 }} />
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8, alignItems: 'center' }}>
+                  {wCharts.keys.map((k, i) => {
+                    const color = wCharts.palette[i % wCharts.palette.length]
+                    const isHidden = wCharts.hidden.has(k)
+                    return (
+                      <button key={k} type="button" onClick={() => wCharts.toggle(k)} title={isHidden ? `Mostra ${k}` : `Nascondi ${k}`}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: isHidden ? '#161b22' : '#21262d', color: isHidden ? '#8b949e' : '#c9d1d9', border: `1px solid ${isHidden ? '#30363d' : color}`, borderRadius: 12, padding: '3px 8px', cursor: 'pointer', fontSize: 12, opacity: isHidden ? 0.6 : 1, textDecoration: isHidden ? 'line-through' : 'none' }}>
+                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: color, opacity: isHidden ? 0.35 : 1, display: 'inline-block' }} />
+                        {k}
+                      </button>
+                    )
+                  })}
+                  {wCharts.keys.length > 1 && (
+                    <>
+                      <span style={{ width: 1, height: 16, background: '#30363d', display: 'inline-block' }} />
+                      <button type="button" style={{ ...S.btn, padding: '3px 8px', fontSize: 12 }} onClick={wCharts.showAll}>Mostra tutte</button>
+                      <button type="button" style={{ ...S.btn, padding: '3px 8px', fontSize: 12 }} onClick={wCharts.hideAll}>Nascondi tutte</button>
+                    </>
+                  )}
+                </div>
+              </>
+            ) : <div style={{ fontSize: 12, color: '#8b949e' }}>Nessun dato pesi per questo run (strategia single-asset o run vecchio senza weights_parquet).</div>}
+          </div>
           {d.stats && <MetricsPanel stats={d.stats} />}
-          {d.tx.length > 0 && <TransactionsTable tx={d.tx} />}
+          {d.tx.length > 0 && <TransactionsTable tx={d.tx} settings={loadSettings()} />}
         </>
       )}
+      {/* Compare overlay — normalizzato a 100, come res.plot() dell'esempio Strategy Combination */}
+      <div style={S.card}>
+        <div style={{ fontWeight: 700, marginBottom: 8 }}>Confronto equity singole (normalizzato a 100) — replica Strategy Combination</div>
+        <div style={{ fontSize: 12, color: '#8b949e', marginBottom: 8 }}>Seleziona 2+ run con ☑ nella tabella, poi premi “Confronta selezionati”. Utile per confrontare EW vs InvVol vs Combined (var. B merged prices).</div>
+        <div style={S.row}>
+          <button type="button" style={S.btn} disabled={t.selected.size < 1} onClick={() => {
+            const ids = [...t.selected]
+            const names: Record<number, string> = {}
+            for (const r of t.runs) if (ids.includes(r.id)) names[r.id] = r.strategy_name ?? `#${r.id}`
+            cmp.load(ids, names)
+          }}>Confronta selezionati ({t.selected.size})</button>
+          {cmp.series.length > 0 && <button type="button" style={S.btn} onClick={cmp.clear}>Pulisci</button>}
+          {cmp.loading && <span style={{ fontSize: 12, color: '#8b949e' }}>caricamento…</span>}
+        </div>
+        {cmp.series.length > 0 && (
+          <>
+            <div ref={cmp.ref} style={{ width: '100%', height: 260 }} />
+            <div style={{ fontSize: 12, color: '#8b949e', marginTop: 6, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              {cmp.series.map((s, i) => <span key={s.id} style={{ color: ['#58a6ff', '#f85149', '#3fb950', '#d29922', '#bc8cff'][i % 5] }}>● {s.name} #{s.id}</span>)}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 }

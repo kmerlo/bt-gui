@@ -85,6 +85,12 @@ export const dataApi = {
       body: JSON.stringify(req),
     }),
   deleteSignal: (id: number) => request<void>(`/api/bt/signals/${id}`, { method: 'DELETE' }),
+  // Weight signals (for WeighTarget)
+  computeWeightSignal: (req: { name?: string; fast_indicator_id: number; slow_indicator_id: number; symbols: string[]; start?: string; end?: string; save?: boolean; mode?: string }) =>
+    request<{ id: number; name: string; meta: Record<string, unknown>; shape?: number[] }>('/api/bt/signals/compute-weights', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
   // unified adapter-aware endpoints (B2)
   fetch: (adapter: 'ffn' | 'yfinance', params: { tickers?: string[]; symbol?: string; name?: string; type?: string; start?: string; end?: string }) =>
     request<UnifiedDataFetch>('/api/bt/data/fetch', {

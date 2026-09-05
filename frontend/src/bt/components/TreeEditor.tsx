@@ -27,8 +27,10 @@ const S = {
 function NodeItem({ node, depth }: { node: NodeConfig; depth: number }) {
   const selectedId = useBtStore((s) => s.selectedId)
   const setSelected = useBtStore((s) => s.setSelected)
+  const duplicateNode = useBtStore((s) => s.duplicateNode)
   const selected = selectedId === node.id
   const isStrategy = node.type === 'Strategy' || node.type === 'FixedIncomeStrategy'
+  const canDuplicate = depth > 0
   const nid = node.id ?? ''
 
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
@@ -62,6 +64,28 @@ function NodeItem({ node, depth }: { node: NodeConfig; depth: number }) {
           {node.type}
         </span>
         {isStrategy && node.algos.length > 0 && <span style={S.badge}>{node.algos.length} algos</span>}
+        {canDuplicate && (
+          <button
+            type="button"
+            title="Duplica nodo"
+            onClick={(e) => {
+              e.stopPropagation()
+              if (nid) duplicateNode(nid)
+            }}
+            style={{
+              background: '#21262d',
+              color: '#8b949e',
+              border: '1px solid #30363d',
+              borderRadius: 4,
+              padding: '2px 6px',
+              cursor: 'pointer',
+              fontSize: 11,
+              lineHeight: 1,
+            }}
+          >
+            ⧉
+          </button>
+        )}
       </div>
       {isStrategy ? (
         node.children.length > 0 ? (

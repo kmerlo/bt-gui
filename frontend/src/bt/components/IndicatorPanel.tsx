@@ -1,5 +1,8 @@
-import { useEffect, useState } from 'react'
-import { dataApi, priceDataApi, type IndicatorDef, type PriceTickerRow } from '../../api/bt'
+import { useEffect, useRef, useState } from 'react'
+import { dataApi, priceDataApi, type IndicatorDef } from '../../api/bt'
+import { useBtStore } from '../store/btStore'
+import { collectTickers } from '../utils/collectTickers'
+import DateInputIT from './DateInputIT'
 
 const S = {
   wrap: {
@@ -26,7 +29,8 @@ const S = {
   msg: { fontSize: 11, color: '#8b949e' },
   err: { fontSize: 11, color: '#f85149' },
   list: { display: 'flex', flexDirection: 'column' as const, gap: 4 },
-  listItem: { border: '1px solid #30363d', borderRadius: 6, background: '#161b22', padding: '6px 8px', fontSize: 12, color: '#c9d1d9', cursor: 'pointer' },
+  listItem: { border: '1px solid #30363d', borderRadius: 6, background: '#161b22', padding: '6px 8px', fontSize: 12, color: '#c9d1d9' },
+  delBtn: { background: 'transparent', border: 'none', color: '#f85149', cursor: 'pointer', fontSize: 14, padding: '0 2px', lineHeight: 1 },
 }
 
 function paramInputs(def: IndicatorDef, values: Record<string, unknown>, onChange: (patch: Record<string, unknown>) => void) {
@@ -44,10 +48,17 @@ function paramInputs(def: IndicatorDef, values: Record<string, unknown>, onChang
 }
 
 export default function IndicatorPanel() {
-  const [tickers, setTickers] = useState<PriceTickerRow[]>([])
+  const tree = useBtStore((s) => s.tree)
+  const tickerStart = useBtStore((s) => s.tickerStart)
+  const tickerEnd = useBtStore((s) => s.tickerEnd)
+  const setTickerStart = useBtStore((s) => s.setTickerStart)
+  const setTickerEnd = useBtStore((s) => s.setTickerEnd)
+
+  const [availableTickers, setAvailableTickers] = useState<string[]>([])
+  const [selectedTickers, setSelectedTickers] = useState<string[]>([])
+  const initDone = useRef(false)
   const [indicators, setIndicators] = useState<{ id: number; name: string; meta: Record<string, unknown> }[]>([])
   const [defs, setDefs] = useState<IndicatorDef[]>([])
-  const [selTicker, setSelTicker] = useState('')
   const [selType, setSelType] = useState('')
   const [params, setParams] = useState<Record<string, unknown>>({})
   const [nameDraft, setNameDraft] = useState('')
@@ -56,41 +67,69 @@ export default function IndicatorPanel() {
   const [warnings, setWarnings] = useState<string[]>([])
 
   useEffect(() => {
-    priceDataApi.list().then(setTickers).catch(() => { /* ignore */ })
+    priceDataApi.list().then((rows) => setAvailableTickers(rows.map((r) => r.symbol))).catch(() => { /* ignore */ })
     dataApi.getIndicatorDefs().then(setDefs).catch(() => { /* ignore */ })
     dataApi.listIndicators().then((rows) =>
       setIndicators(rows.map((r) => ({ id: r.id, name: r.name, meta: r.meta })))
     ).catch(() => { /* ignore */ })
   }, [])
 
+  // Auto-select all strategy tickers on first data load — runs exactly once per tree
+  const treeTickers = tree ? collectTickers(tree.root) : []
+  const defaultSelected = treeTickers.filter((t) => availableTickers.includes(t))
+  useEffect(() => {
+    initDone.current = false
+  }, [tree])
+  useEffect(() => {
+    if (!initDone.current && defaultSelected.length > 0) {
+      initDone.current = true
+      setSelectedTickers(defaultSelected)
+    }
+  }, [defaultSelected, tree])
+  const hasData = treeTickers.some((t) => availableTickers.includes(t))
   const selectedDef = defs.find((d) => d.type === selType) ?? null
 
+  const toggleTicker = (sym: string) => {
+    setSelectedTickers((prev) => prev.includes(sym) ? prev.filter((t) => t !== sym) : [...prev, sym])
+  }
+
   const handleCompute = async () => {
-    if (!selTicker) { setMsg('select ticker'); return }
+    if (selectedTickers.length === 0) { setMsg('select at least one ticker'); return }
     if (!selType) { setMsg('select indicator type'); return }
     setComputing(true)
-      setMsg('')
-      setWarnings([])
-      try {
-      const t = tickers.find((r) => r.symbol === selTicker)
+    setMsg('')
+    setWarnings([])
+    const results: { id: number; name: string; meta: Record<string, unknown> }[] = []
+    const allWarnings: string[] = []
+    try {
       const r = await dataApi.computeIndicator({
-        symbol: selTicker,
-        start: t?.start || undefined,
-        end: t?.end || undefined,
+        symbols: selectedTickers,
+        start: tickerStart || undefined,
+        end: tickerEnd || undefined,
         type: selType,
         params,
         save: true,
         name: nameDraft.trim() || undefined,
       })
-      setMsg(`saved ${r.name}`)
-      if (r.warnings?.length) {
-        setWarnings(r.warnings)
+      // normalize: backend may return single result or list
+      const items = Array.isArray(r) ? r : [r]
+      for (const item of items) {
+        results.push({ id: item.id, name: item.name, meta: item.meta })
+        if (item.warnings?.length) allWarnings.push(...item.warnings)
       }
-      setIndicators((prev) => [{ id: r.id, name: r.name, meta: r.meta }, ...prev])
-      setNameDraft('')
+      if (results.length > 0) {
+        setMsg(`saved ${results.length} indicator(s)`)
+        setIndicators((prev) => [...results, ...prev])
+        setNameDraft('')
+        // notify other components (AlgoStack) that indicators changed
+        window.dispatchEvent(new Event('bt-indicator-refresh'))
+      } else {
+        setMsg('no indicators saved (check logs)')
+      }
     } catch (e) {
       setMsg(String(e))
     } finally {
+      setWarnings(allWarnings)
       setComputing(false)
     }
   }
@@ -100,13 +139,30 @@ export default function IndicatorPanel() {
       <div style={S.title}>Indicators</div>
 
       <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <span style={S.label}>Ticker</span>
-        <select value={selTicker} onChange={(e) => setSelTicker(e.target.value)} style={S.select}>
-          <option value="">— select —</option>
-          {tickers.map((t) => (
-            <option key={t.symbol} value={t.symbol}>{t.symbol} ({t.count} rows)</option>
+        <span style={S.label}>Tickers</span>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          {treeTickers.length === 0 && <span style={{ fontSize: 11, color: '#8b949e' }}>Nessun ticker nella strategia</span>}
+          {treeTickers.length > 0 && !hasData && <span style={{ fontSize: 11, color: '#8b949e' }}>Nessun dato per i ticker della strategia</span>}
+          {treeTickers.map((sym) => (
+            <button
+              key={sym}
+              type="button"
+              onClick={() => toggleTicker(sym)}
+              style={{
+                background: selectedTickers.includes(sym) ? '#238636' : '#21262d',
+                color: selectedTickers.includes(sym) ? '#fff' : '#8b949e',
+                border: '1px solid #30363d',
+                borderRadius: 4,
+                padding: '2px 8px',
+                cursor: 'pointer',
+                fontSize: 11,
+              }}
+              title={availableTickers.includes(sym) ? `${sym} — dati disponibili` : `${sym} — nessun dato disponibile`}
+            >
+              {sym}
+            </button>
           ))}
-        </select>
+        </div>
       </label>
 
       <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -126,8 +182,17 @@ export default function IndicatorPanel() {
       )}
 
       <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <span style={S.label}>Start date</span>
+        <DateInputIT value={tickerStart ?? ''} onChange={setTickerStart} style={S.input} placeholder="gg/mm/aaaa" />
+      </label>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <span style={S.label}>End date</span>
+        <DateInputIT value={tickerEnd ?? ''} onChange={setTickerEnd} style={S.input} placeholder="gg/mm/aaaa" />
+      </label>
+
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         <span style={S.label}>Name (optional)</span>
-        <input value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} placeholder="auto-generated if empty" style={S.input} />
+        <input value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} placeholder="auto: TICKER_INDICATOR_params" style={S.input} />
       </label>
 
       <button type="button" style={computing ? S.btnDis : S.btn} onClick={handleCompute} disabled={computing}>
@@ -153,6 +218,18 @@ export default function IndicatorPanel() {
                 <div style={S.row}>
                   <span style={{ flex: 1 }}>{ind.name}</span>
                   <span style={S.badge}>{String(ind.meta?.indicator_type ?? '?')}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      dataApi.deleteIndicator(ind.id).then(() =>
+                        setIndicators((prev) => prev.filter((x) => x.id !== ind.id))
+                      ).catch(() => { /* ignore */ })
+                    }}
+                    style={S.delBtn}
+                    title="Delete indicator"
+                  >
+                    ×
+                  </button>
                 </div>
                 {Boolean(ind.meta?.params) && (
                   <div style={{ fontSize: 11, color: '#8b949e', marginTop: 2 }}>
