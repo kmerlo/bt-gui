@@ -156,7 +156,7 @@ def compute_indicator_route(req: ComputeIndicatorRequest, db: Session = Depends(
         shape = list(result.shape) if isinstance(result, pd.DataFrame) else None
         return {"meta": meta, "shape": shape, "warnings": warnings}
 
-    # Auto-generated name: TICKER_INDICATOR_TYPE_params (e.g. SPY_SMA_50)
+    # Auto-generated name: TICKER[-TICKER...]_INDICATOR_TYPE_params (e.g. SPY_SMA_50, SPY-AAPL_SMA_50)
     _PARAM_KEYS_ORDER = ("length", "period", "fast", "slow", "signal")
     param_parts: list[str] = []
     for pk in _PARAM_KEYS_ORDER:
@@ -167,7 +167,7 @@ def compute_indicator_route(req: ComputeIndicatorRequest, db: Session = Depends(
         if k not in _PARAM_KEYS_ORDER and v is not None:
             param_parts.append(f"{k}={v}")
     param_label = "_".join(param_parts) or "1"
-    base_name = req.name or f"{symbols[0]}_{req.type.upper()}_{param_label}"
+    base_name = req.name or f"{'-'.join(symbols)}_{req.type.upper()}_{param_label}"
 
     if isinstance(result, pd.DataFrame):
         df_out = result
