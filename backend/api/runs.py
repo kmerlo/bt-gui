@@ -4,6 +4,7 @@ import math
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -349,6 +350,50 @@ def get_run_prices(
         return {"dates": dates, "values": values, "weights": weights, "benchmark": benchmark, "total": total, "offset": offset, "limit": limit}
     first = page.columns[0]
     return {"dates": dates, "values": page[first].tolist(), "weights": {}, "benchmark": benchmark, "total": total, "offset": offset, "limit": limit}
+
+
+@router.get("/runs/{run_id}/quantstats")
+def get_run_quantstats(run_id: int, db: Session = Depends(get_db)):  # noqa: B008
+    row = db.query(DBRun).filter(DBRun.id == run_id).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="not found")
+    from backend.database import get_active_db
+    from backend.services.quantstats_service import quantstats_bundle
+
+    return {"run_id": run_id, **quantstats_bundle(run_id, get_active_db())}
+
+
+@router.get("/runs/{run_id}/quantstats/plot")
+def get_run_quantstats_plot(
+    run_id: int,
+    kind: str = Query("snapshot", pattern="^(snapshot|monthly_heatmap|drawdown|distribution)$"),
+    db: Session = Depends(get_db),  # noqa: B008
+):
+    row = db.query(DBRun).filter(DBRun.id == run_id).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="not found")
+    from backend.database import get_active_db
+    from backend.services.quantstats_service import plot_b64
+
+    b64 = plot_b64(run_id, kind, get_active_db())
+    if b64 is None:
+        raise HTTPException(status_code=422, detail="quantstats plot failed (run senza equity o serie troppo corta)")
+    return {"run_id": run_id, "kind": kind, "png_base64": b64}
+
+
+@router.get("/runs/{run_id}/quantstats/tearsheet")
+def get_run_quantstats_tearsheet(run_id: int, download: bool = Query(False), db: Session = Depends(get_db)):  # noqa: B008
+    row = db.query(DBRun).filter(DBRun.id == run_id).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="not found")
+    from backend.database import get_active_db
+    from backend.services.quantstats_service import get_tearsheet
+
+    html = get_tearsheet(run_id, get_active_db())
+    if not html:
+        raise HTTPException(status_code=422, detail="quantstats tearsheet failed (run senza equity o serie troppo corta)")
+    headers = {"Content-Disposition": f'attachment; filename="quantstats-run-{run_id}.html"'} if download else {}
+    return HTMLResponse(content=html, headers=headers)
 
 
 @router.websocket("/backtest/{run_id}/progress")

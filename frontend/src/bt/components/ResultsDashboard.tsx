@@ -6,6 +6,7 @@ import { useCompareCharts } from '../../hooks/useCompareCharts'
 import { loadSettings } from '../../api/settings'
 import RunsTable from './RunsTable'
 import MetricsPanel from './MetricsPanel'
+import QuantStatsPanel from './QuantStatsPanel'
 import BenchmarkPanel from './BenchmarkPanel'
 import TransactionsTable from './TransactionsTable'
 
@@ -101,6 +102,7 @@ export default function ResultsDashboard({ runId }: { runId: number | null }) {
             ) : <div style={{ fontSize: 12, color: '#8b949e' }}>Nessun dato pesi per questo run (strategia single-asset o run vecchio senza weights_parquet).</div>}
           </div>
           {d.stats && <MetricsPanel stats={d.stats} />}
+          {d.sel && <QuantStatsPanel runId={d.sel} />}
           <BenchmarkPanel ticker={d.benchmarkTicker} stats={d.benchmarkStats} />
           {d.tx.length > 0 && <TransactionsTable tx={d.tx} settings={loadSettings()} />}
         </>

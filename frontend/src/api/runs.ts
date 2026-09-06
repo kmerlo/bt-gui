@@ -1,4 +1,4 @@
-import { WS_BASE, request } from './request'
+import { API_BASE, WS_BASE, request } from './request'
 
 export type RunRow = { id: number; strategy_id: number | null; strategy_name: string | null; stats: Record<string, unknown> | null; config: Record<string, unknown>; created_at: string; start: string | null; end: string | null; cagr: number | null; total_return: number | null; max_drawdown: number | null; sharpe: number | null; sortino: number | null }
 export type BenchmarkEquity = { ticker: string; dates: string[]; values: (number | null)[] }
@@ -11,6 +11,9 @@ export type BenchmarkStats = {
 export type RunDetail = RunRow & { transactions?: unknown[]; benchmark_ticker?: string | null; benchmark?: BenchmarkStats | null }
 export type PricesResponse = { dates: string[]; values: number[]; weights: Record<string, number[]>; benchmark?: BenchmarkEquity | null; total: number; offset: number; limit: number }
 
+export type QuantStatsResponse = { run_id: number; metrics: Record<string, number | null>; benchmark_ticker: string | null }
+export type QuantPlotKind = 'snapshot' | 'monthly_heatmap' | 'drawdown' | 'distribution'
+export type QuantPlotResponse = { run_id: number; kind: QuantPlotKind; png_base64: string }
 export type RunsListResponse = { data: RunRow[]; total: number; limit: number; offset: number }
 
 export const backtestApi = {
@@ -37,6 +40,9 @@ export const backtestApi = {
     return request<RunsListResponse>(`/api/bt/runs${qs}`)
   },
   getRun: (id: number) => request<RunDetail>(`/api/bt/runs/${id}`),
+  getQuantStats: (id: number) => request<QuantStatsResponse>(`/api/bt/runs/${id}/quantstats`),
+  getQuantPlot: (id: number, kind: QuantPlotKind) => request<QuantPlotResponse>(`/api/bt/runs/${id}/quantstats/plot?kind=${kind}`),
+  quantTearsheetUrl: (id: number) => `${API_BASE}/api/bt/runs/${id}/quantstats/tearsheet`,
   getPrices: (id: number, opts?: { start?: string; end?: string; limit?: number; offset?: number; benchmark_ticker?: string }) => {
     const q = new URLSearchParams()
     if (opts?.start) q.set('start', opts.start)
