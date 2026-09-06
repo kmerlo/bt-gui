@@ -35,14 +35,9 @@ def list_runs(  # noqa: B008
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),  # noqa: B008
 ):
-    total = db.query(DBRun).count()
-    rows = (
-        db.query(DBRun)
-        .order_by(DBRun.id.desc())
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
+    # ponytail: table is tiny (stats/parquet filters need Python anyway — PERF-05 deferred),
+    # so filter/sort the full id-desc set first, then slice; total = filtered count
+    rows = db.query(DBRun).order_by(DBRun.id.desc()).all()
     from backend.database import Strategy as DBStrategy
 
     strat_rows = db.query(DBStrategy).all()
@@ -167,10 +162,12 @@ def list_runs(  # noqa: B008
             apply_sort(out, sort_by, sort_dir, allowed - _NUMERIC_SORT_KEYS | {"id", "strategy_name", "created_at", "start", "end"})  # noqa: E501
             # fallback if helper altered behaviour: keep original string lower sort
             # (helper already sorted; keep no-op)
-    for r in out:
+    total_filtered = len(out)
+    page = out[offset : offset + limit]
+    for r in page:
         for k in [f"_{kk}" for kk in ["cagr", "total_return", "max_drawdown", "sharpe", "sortino"]]:
             r.pop(k, None)
-    return {"data": out, "total": total, "limit": limit, "offset": offset}
+    return {"data": page, "total": total_filtered, "limit": limit, "offset": offset}
 
 
 def _run_config(row: DBRun) -> dict:

@@ -55,12 +55,7 @@ def create_backtest(req: RunRequest, db: Session = Depends(get_db)):  # noqa: B0
 
     cfg_dict["benchmark_ticker"] = normalize_ticker(req.benchmark_ticker)
 
-    row = DBRun(strategy_id=strategy_id, config_json=cfg_dict, stats_json=None)
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    run_id = row.id
-
+    # ponytail: validate BEFORE insert — every 4xx below must not leave a ghost run row
     tickers = [t.upper() for t in req.tickers] if req.tickers else []
     if tickers:
         from backend.services.backtest_runner import _load_prices_from_db
@@ -100,6 +95,12 @@ def create_backtest(req: RunRequest, db: Session = Depends(get_db)):  # noqa: B0
         raise
     except Exception:
         pass  # validation is best-effort, backtest_runner will enforce again
+
+    row = DBRun(strategy_id=strategy_id, config_json=cfg_dict, stats_json=None)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    run_id = row.id
 
     additional: dict[str, pd.DataFrame] = {}
     volume = None
