@@ -31,7 +31,7 @@ class RunRequest(BaseModel):
 
 @router.post("/backtest", status_code=201)
 def create_backtest(req: RunRequest, db: Session = Depends(get_db)):  # noqa: B008
-    from backend.services.backtest_runner import schedule_backtest
+    from backend.services.backtest_progress import schedule_backtest
 
     if req.tree is None and req.strategy_id is None:
         raise HTTPException(status_code=422, detail="tree or strategy_id required")
@@ -58,7 +58,7 @@ def create_backtest(req: RunRequest, db: Session = Depends(get_db)):  # noqa: B0
     # ponytail: validate BEFORE insert — every 4xx below must not leave a ghost run row
     tickers = [t.upper() for t in req.tickers] if req.tickers else []
     if tickers:
-        from backend.services.backtest_runner import _load_prices_from_db
+        from backend.services.price_loading import _load_prices_from_db
 
         price_df = _load_prices_from_db(
             tickers,
@@ -165,7 +165,7 @@ def create_backtest(req: RunRequest, db: Session = Depends(get_db)):  # noqa: B0
             s_df.index = pd.to_datetime(s_df.index)
             indicators[str(sid)] = s_df
     try:
-        from backend.services.backtest_runner import schedule_backtest
+        from backend.services.backtest_progress import schedule_backtest
 
         schedule_backtest(run_id, tree, req.config, price_df, additional, volume, volatility, indicators)
     except Exception as e:

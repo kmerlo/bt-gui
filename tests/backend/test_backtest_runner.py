@@ -275,7 +275,7 @@ def test_run_backtest_sync_saves_weights_parquet():
 
 def test_task_registry_stores_and_removes():
     """Verify that pending_backtest_count starts at 0 and the registry exists."""
-    from backend.services.backtest_runner import _backtest_tasks, pending_backtest_count
+    from backend.services.backtest_progress import _backtest_tasks, pending_backtest_count
 
     assert pending_backtest_count() == 0
     assert isinstance(_backtest_tasks, dict)

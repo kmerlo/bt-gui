@@ -368,7 +368,7 @@ async def ws_progress(websocket: WebSocket, run_id: int):
     try:
         import asyncio
 
-        from backend.services.backtest_runner import get_progress
+        from backend.services.backtest_progress import get_progress
 
         while True:
             prog = get_progress(run_id)
