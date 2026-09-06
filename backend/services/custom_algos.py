@@ -3,6 +3,10 @@ from __future__ import annotations
 import pandas as pd
 from bt.core import Algo
 
+# ponytail: stat_algos lives in its own module (this file is past the 500-line cap);
+# re-exported here so algo_registry discovery (bt.algos + custom_algos) picks them up.
+from backend.services.stat_algos import StatDrawdown, StatInfoRatio  # noqa: F401
+
 
 class StopLossTakeProfit(Algo):
     """

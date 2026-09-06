@@ -12,6 +12,7 @@ from bt.core import Algo
 _PREFIX_CATEGORY = [
     ("Run", "Scheduling"),
     ("Select", "Selection"),
+    ("Stat", "Selection"),
     ("Weigh", "Weighting"),
     ("Limit", "Risk"),
     ("Target", "Risk"),

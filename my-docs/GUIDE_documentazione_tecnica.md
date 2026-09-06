@@ -253,17 +253,19 @@ La dipendenza è dichiarata anche in `[project]` come `bt>=1.2.0`, ma la source 
 
 ### Custom Algos (dal 2026-09-03)
 
-Algos non presenti in `bt` upstream vivono in `backend/services/custom_algos.py` e sono scoperti automaticamente da `algo_registry.py:discover_algos()` (loop su `bt.algos` + `custom_algos`).
+Algos non presenti in `bt` upstream vivono in `backend/services/stat_algos.py` e `backend/services/custom_algos.py` (quest'ultimo li ri-esporta: `custom_algos.py` ha superato le 500 righe, quindi i nuovi algo stanno in modulo dedicato) e sono scoperti automaticamente da `algo_registry.py:discover_algos()` (loop su `bt.algos` + `custom_algos`; categoria `Stat*` → Selection).
 
 | Algo | File | Categoria | Params | Requires/Sets |
 |------|------|-----------|--------|---------------|
 | `StopLossTakeProfit` | `custom_algos.py:StopLossTakeProfit` | Risk | `stop_loss_long` (0.03), `take_profit_long` (0.5), `stop_loss_short` (0.03), `take_profit_short` (0.05), `trailing_long` (0), `trailing_short` (0) | Requires `weights` / Sets `weights`, `run_always=True` |
 | `EntryGateMemory` | `custom_algos.py:EntryGateMemory` | Selection | `cross_signal` (indicator), `filter_signal` (indicator, optional), `period` (monthly/weekly/daily), `filter_mode` (at_entry/at_trigger/both) | Requires `universe`+signals / Sets `selected`, `run_always=True` |
 | `RebalanceAlways` | `custom_algos.py:RebalanceAlways` | Execution | – | Wraps `Rebalance`, `run_always=True` |
+| `StatDrawdown` | `stat_algos.py:StatDrawdown` | Selection | `lookback` (DateOffset `months=3`, GUI: testo `years=10`), `lag` (`days=0`) | Requires `selected` / Sets `stat` (drawdown corrente via `ffn.to_drawdown_series`) |
+| `StatInfoRatio` | `stat_algos.py:StatInfoRatio` | Selection | `benchmark` (ticker required, case-insensitive), `lookback` (`months=3`), `lag` (`days=0`) | Requires `selected` / Sets `stat` (IR vs benchmark via `ffn.calc_information_ratio`) |
 
 - **Posizionamento tipico per entry periodica + exit daily (Tutorial 8A):** `EntryGateMemory(period=monthly, cross_signal, filter_signal, filter_mode) → WeighEqually → StopLossTakeProfit → RebalanceAlways`. Tutti e tre con `run_always=True` così: `EntryGateMemory` ricorda `crossUp` giornaliero fino al prossimo `period`, `StopLossTakeProfit` controlla SL/TP ogni giorno anche quando `EntryGateMemory` blocca, `RebalanceAlways` esegue il sell giornaliero.
 - **Trailing come sostituto**: se `trailing_long>0` lo SL è `max_price*(1-trailing_long)` (long) / `min_price*(1+trailing_short)` (short); altrimenti fisso `entry*(1±stop_loss)`. TP resta sull'entry.
 - **filter_mode** in `EntryGateMemory`: `at_entry` (default, `price>SMA200` rivalutato il giorno di entry), `at_trigger` (fotografato al giorno del cross), `both` (entrambi True).
 - **FE**: nessun hard-code — `AlgoStack.tsx` lo elenca via `GET /api/bt/algos` con categoria Risk/Selection.
 
-*Ultimo aggiornamento: 2026-09-03* — aggiunti StopLossTakeProfit (run_always), EntryGateMemory e RebalanceAlways; documentati piano 025 (price_source local/market), pandas_ta_classic (193 indicatori), signal_condition per SelectWhere, Signals & Weight Signals (compute-weights 1/-1 vs 1/0), price_column globale in Settings, Builder layout flex + hash routing, avvio dev.sh
+*Ultimo aggiornamento: 2026-09-06* — aggiunti StatDrawdown/StatInfoRatio (`stat_algos.py`, Tutorial 11 SPHMV); precedenti: StopLossTakeProfit (run_always), EntryGateMemory e RebalanceAlways (2026-09-03); documentati piano 025 (price_source local/market), pandas_ta_classic (193 indicatori), signal_condition per SelectWhere, Signals & Weight Signals (compute-weights 1/-1 vs 1/0), price_column globale in Settings, Builder layout flex + hash routing, avvio dev.sh

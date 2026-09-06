@@ -14,6 +14,7 @@ Questo file contiene tutorial passo passo per riprodurre gli esempi tratti dalla
 | 8 | [Stop Loss & Take Profit](#tutorial-sl-tp) | [Using Pandas to set SL/TP](https://zachlim98.github.io/me/2020-12/Using-Pandas-to-set-SL) + esempio SPY | SPY long-only SL 5%/TP 15% con filtro SMA200 + crossUp SMA20 via StopLossTakeProfit |
 | 9 | [ERC Risk Parity](#tutorial-erc) | [Equally Weighted Risk Contributions](https://pmorissette.github.io/bt/examples.html#equally-weighted-risk-contributions-portfolio) | SPY+TLT pesati a uguale risk-contribution via WeighERC |
 | 10 | [Flexible Backtesting (Medium)](#tutorial-flex-bt) | [Flexible Backtesting with BT](https://medium.com/@richardhwlin/flexible-backtesting-with-bt-7295c0dde5dd) (Richard L) | pesi fissi 80/20-60/40-40/60, rotation momentum, ottimizzazione EW/ERC/InvVol, pooled 80/20 con children |
+| 11 | [Advanced Backtesting (Medium)](#tutorial-adv-bt) | [Advanced Backtesting with BT](https://medium.com/@richardhwlin/advanced-backtesting-with-bt-635ed441cb60) (Richard L) | sector-rotator SPHMV value+momentum (2 stadi) + vol-control giornaliero via WeighTarget |
 
 ---
 
@@ -1830,3 +1831,223 @@ Valori attesi pooled 80/20 (articolo, risk-free 1%): Total Return ~69%, CAGR ~6,
 - **Risk-free rate:** la GUI non espone `set_riskfree_rate` — gli Sharpe mostrati sono a risk-free 0; la differenza con la tabella articolo (~1% annuo) è trascurabile su equity ma visibile su `conservative`.
 - **Lookback custom:** `SelectMomentum` accetta `lookback` come testo (`months=6`, `years=1`) e `Weigh*`/`lag` allo stesso modo — usare le 4 varianti Parte B per confrontare la sensibilità al lookback prima di toccare il pooled.
 - **Salvare:** **Save** per ciascuna variante (`aggressive`, `moderate`, `conservative`, `mom3m_equity`, `erc_equity`, `iv_equity`, `pooled`).
+
+---
+
+<a name="tutorial-adv-bt"></a>
+
+# Tutorial 11 — Advanced Backtesting with BT (Richard L, Medium)
+
+Questo tutorial adatta l'articolo *Advanced Backtesting with BT* di Richard L (https://medium.com/@richardhwlin/advanced-backtesting-with-bt-635ed441cb60): replica della strategia **S&P Sector Rotator (SPHMV)** — screen value+momentum a 2 stadi sui settori S&P — più 2 benchmark e un overlay di **daily volatility control** via `WeighTarget`. Periodo articolo: 2002-07-29 → 2020-01-31.
+
+Codice originale bt (estratto, universo articolo = `tickers['sp500']` + `tickers['sectors']` (11 settori) + `tickers['cash']`):
+
+```python
+# benchmark: S&P 500 passivo e settori equal-weight
+sp500 = bt.Strategy('SP500', [bt.algos.RunQuarterly(), bt.algos.SelectAll(),
+    bt.algos.SelectThese([tickers['sp500']]), bt.algos.WeighEqually(), bt.algos.Rebalance()])
+spesw = bt.Strategy('SPESW', [bt.algos.RunQuarterly(), bt.algos.SelectAll(),
+    bt.algos.SelectThese(tickers['sectors']), bt.algos.WeighEqually(), bt.algos.Rebalance()])
+
+# screen value: max drawdown su 10 anni -> i 5 con drawdown più profondo
+class StatDrawdown(bt.Algo):
+    def __init__(self, lookback=pd.DateOffset(months=3), lag=pd.DateOffset(days=0)):
+        super().__init__(); self.lookback = lookback; self.lag = lag
+    def __call__(self, target):
+        selected = target.temp['selected']
+        t0 = target.now - self.lag
+        prc = target.universe.loc[(t0 - self.lookback):t0, selected]
+        target.temp['stat'] = prc.to_drawdown_series().iloc[-1]
+        return True
+
+# screen momentum: information ratio vs benchmark su 7 mesi con lag 1 mese
+class StatInfoRatio(bt.Algo):
+    def __init__(self, benchmark, lookback=pd.DateOffset(months=3), lag=pd.DateOffset(days=0)):
+        super().__init__(); self.benchmark = benchmark; self.lookback = lookback; self.lag = lag
+    def __call__(self, target):
+        selected = target.temp['selected']
+        t0 = target.now - self.lag
+        prc = target.universe.loc[(t0 - self.lookback):t0, selected].pct_change().dropna()
+        bmk = target.universe.loc[(t0 - self.lookback):t0, self.benchmark].pct_change().dropna()
+        target.temp['stat'] = pd.Series({p: prc[p].calc_information_ratio(bmk) for p in prc})
+        return True
+
+sphmv = bt.Strategy('SPHMV', [bt.algos.RunQuarterly(), bt.algos.SelectAll(),
+    bt.algos.SelectThese(tickers['sectors']),
+    StatDrawdown(lookback=pd.DateOffset(years=10)), bt.algos.SelectN(5, sort_descending=False),
+    StatInfoRatio(benchmark=tickers['sp500'], lookback=pd.DateOffset(months=7), lag=pd.DateOffset(months=1)),
+    bt.algos.SelectN(3, sort_descending=True),
+    bt.algos.WeighEqually(), bt.algos.Rebalance()])
+
+report = bt.run(bt.Backtest(sp500, prices), bt.Backtest(spesw, prices), bt.Backtest(sphmv, prices))
+# report.plot()  +  report.backtests['SPHMV'].security_weights.plot.area()
+
+# volatility control giornaliero: target 20% vol su SPHMV, resto in SHY
+target_vol = 20
+real_vol = prices[tickers['sp500']].pct_change().rolling(20).std().multiply(np.sqrt(252) * 100)
+w = real_vol.map(lambda x: min(1, target_vol / x))
+target_weight = pd.DataFrame({'SPHMV': w, 'SHY': 1 - w})
+spdvc = bt.Strategy('SPDVC', [bt.algos.RunDaily(), bt.algos.SelectAll(),
+    bt.algos.WeighTarget(target_weight), bt.algos.Rebalance()], children=[sphmv, tickers['cash']])
+report2 = bt.run(bt.Backtest(sp500, prices), bt.Backtest(sphmv, prices), bt.Backtest(spdvc, prices))
+```
+
+## Mappa di replicabilità (onesta)
+
+| Blocco articolo | Algo chiave | In bt-gui |
+|-----------------|-------------|-----------|
+| A — benchmark SP500 / SPESW | `RunQuarterly, SelectThese, WeighEqually` | ✅ replica fedele (con `SelectAll` al posto di `SelectThese` su albero dedicato) |
+| B — SPHMV value+momentum a 2 stadi | `StatDrawdown + SelectN(5)` poi `StatInfoRatio + SelectN(3)` | ✅ replica fedele: custom in `backend/services/stat_algos.py` (scoperti come Selection, `lookback`/`lag` come testo DateOffset, `benchmark` = ticker) |
+| C — SPDVC vol-control giornaliero | `RunDaily + WeighTarget(target_weight)` su `children=[sphmv, SHY]` | ✅ replica fedele del pattern (come Tutorial 7 / Tutorial 10-D): parent con 2 child + signal pesi pre-calcolato |
+
+## Prerequisiti
+
+- Backend `http://localhost:8001` + Frontend `http://localhost:3001`
+- Nessun price source pre-esistente necessario (Step 1)
+
+---
+
+## Step 1 — caricare i dati di prezzo
+
+L'articolo usa `bt.data.get` su 11 ETF settoriali + `IVV` (S&P 500) + `SHY` (cash). Il follow-up validazione cita esplicitamente `IYZ` (telecom) e `IDU` (utilities) — famiglia iShares US. In bt-gui i prezzi vengono da yfinance (`Ticker Catalog`), tutti disponibili su Yahoo.
+
+1. Nel menu cliccare **Ticker Catalog** (vista Data).
+2. Campo **TICKER**: `IVV` — **Start**: `2002-01-01` (margine prima del 2002-07-29 dell'articolo) — lasciare vuoto End.
+3. Cliccare **Fetch** e attendere `count` >0.
+4. Ripetere per `SHY` e per l'universo settoriale. Test rapido (consigliato): 9 SPDR classici con storia completa dal 1998 — `XLY,XLP,XLE,XLF,XLV,XLI,XLB,XLK,XLU`. Replica a 11: aggiungere `XLRE` (dal 2015) e `XLC` (dal 2018) accettando warmup più corto, oppure usare gli iShares `IYH,IYF,IYE,IYJ,IYM,IYG,IYK,IDU,IYZ` (+2 a scelta) per restare sulla famiglia dell'articolo.
+5. Verificare che tutti abbiano `count` >0.
+
+> `XLRE`/`XLC` nascono nel 2015/2018 (spin-off da `XLF`/`XLY`): con universo a 11 il backtest parte di fatto quando tutti hanno dati (serve `SelectHasData` o Start tardivo). Per replicare il periodo 2002→2020 usare l'universo a 9.
+
+---
+
+## Parte A — benchmark SP500 / SPESW (replica fedele)
+
+L'articolo definisce i 2 benchmark sullo stesso `prices`; in bt-gui si fanno 2 alberi separati (stessa logica del Tutorial 10-A: albero dedicato ≡ `SelectThese` su universo condiviso).
+
+### Step A2 — albero `SP500`
+
+```
+SP500 (Strategy)
+└── IVV (Security)
+```
+
+Algo Stack (root `SP500`):
+
+| Ordine | Algo | Parametri |
+|--------|------|-----------|
+| 1 | RunQuarterly | nessun parametro |
+| 2 | SelectAll | nessun parametro (≡ `SelectThese([IVV])` su albero a 1 Security) |
+| 3 | WeighEqually | nessun parametro |
+| 4 | Rebalance | nessun parametro |
+
+### Step A3 — albero `SPESW`
+
+```
+SPESW (Strategy)
+├── XLY (Security)
+├── XLP (Security)
+├── ... (tutti i settori dell'universo scelto)
+```
+
+Stesso Stack: `RunQuarterly → SelectAll → WeighEqually → Rebalance` (**4 algos**).
+
+### Step A4 — run e confronto
+
+1. Per ciascun albero: **Save**, poi **Run** (capital `100000`, no commission, `integer_positions` off).
+2. In **Results** spuntare i 2 run e usare **Confronto equity singole (normalizzato a 100)** — equivale a `report.plot()` con titolo "S&P Sector Rotator Strategy".
+3. **Weights** di `SPESW` deve mostrare ~1/N fisso per settore (nessuna rotazione — è il benchmark passivo).
+
+---
+
+## Parte B — SPHMV (screen a 2 stadi, replica fedele)
+
+Catena originale (trimestrale): `SelectThese(settori) → StatDrawdown(10y) → SelectN(5 asc: i 5 con drawdown più profondo = più "cheap") → StatInfoRatio(7m, lag 1m vs IVV) → SelectN(3 desc: i 3 con momentum risk-adjusted migliore) → WeighEqually → Rebalance`.
+
+`SelectN` è nativo bt (discovery automatica da `bt.algos`); `StatDrawdown`/`StatInfoRatio` sono custom in `backend/services/stat_algos.py` (categoria **Selection**, stesso pattern di `StopLossTakeProfit`/`EntryGateMemory`), con `lookback`/`lag` come testo DateOffset e `benchmark` = ticker (case-insensitive). Senza di essi `SelectN` ordinerebbe su `stat` mai impostato.
+
+### Step B2 — albero `SPHMV` e Algo Stack fedele
+
+```
+SPHMV (Strategy)
+├── XLY (Security)
+├── XLP (Security)
+├── ... (stesso universo di SPESW)
+```
+
+| Ordine | Algo | Parametri |
+|--------|------|-----------|
+| 1 | RunQuarterly | nessun parametro |
+| 2 | SelectAll | nessun parametro (≡ `SelectThese(settori)` su albero dedicato) |
+| 3 | StatDrawdown | **lookback**: `years=10`; **lag** vuoto (= default `days=0`) |
+| 4 | SelectN | **n**: `5`; **sort_descending**: `false` (tiene i 5 drawdown più profondi) |
+| 5 | StatInfoRatio | **benchmark**: `IVV`; **lookback**: `months=7`; **lag**: `months=1` |
+| 6 | SelectN | **n**: `3`; **sort_descending**: `true` (tiene i 3 IR migliori) |
+| 7 | WeighEqually | nessun parametro |
+| 8 | Rebalance | nessun parametro |
+
+> Verificare **`8 algos`**. `benchmark` è required: vuoto → errore esplicito; ticker ignoto → `ValueError` con colonne disponibili. A warmup insufficiente (primi 10 anni per il drawdown) la selezione è vuota → cash, senza crash.
+>
+> **Variante proxy a 1 stadio** (solo algo nativi, senza `Stat*`): sostituire le righe 3–6 con un unico `SelectMomentum` (**n**: `3`, **lookback**: `months=6`). Classifica su total-return invece che su information-ratio: sovrappesa i settori ad alta vol a parità di return. Utile per confronto rapido fedele-vs-proxy in overlay.
+
+---
+
+## Parte C — SPDVC volatility control (replica fedele del pattern)
+
+L'articolo costruisce un `target_weight` giornaliero (`w = min(1, 20 / real_vol20)`, resto in `SHY`) e lo applica con `WeighTarget` su pooled `children=[sphmv, cash]`. In bt-gui è il pattern Tutorial 7 / Tutorial 10-D (parent + 2 child + pesi pre-calcolati).
+
+### Step C1 — signal pesi target (`WeighTarget`)
+
+1. Calcolare fuori GUI (o via pannello **Signals → Weight Signal**) il DataFrame `target_weight` con colonne `SPHMV`/`SHY` (indice giornaliero, `w` 0–1 come sopra con `real_vol` = std 20gg di `IVV` annualizzata).
+2. Salvarlo come signal pesi (es. nome `vol_target_20`) — `type='signal'`, `source='computed_weight'`.
+
+### Step C2 — albero `SPDVC`
+
+```
+SPDVC (Strategy)                       # RunDaily → SelectAll → WeighTarget(vol_target_20) → Rebalance
+├── SPHMV (Strategy)                      # Stack dello Step B2 (RunQuarterly → ... → Rebalance, 8 algos)
+│   ├── XLY (Security)
+│   └── ... (universo settoriale)
+└── SHY (Security)                     # cash: Security foglia, come `tickers['cash']` dell'articolo
+```
+
+| Nodo | Algo Stack |
+|------|-----------|
+| `SPDVC` (root) | `RunDaily` → `SelectAll` → `WeighTarget` (**weights**: selezionare `vol_target_20`) → `Rebalance` |
+| `SPHMV` (child) | Stack dello Step B2 (8 algos, resta trimestrale: il parent lo rivaluta come equity sintetica ogni giorno) |
+
+> Il parent **non** ha lag/warmup (come l'originale): parte da subito, `w` primo mese ≈ 1 finché `real_vol20` non è valida — normale. `WeighTarget.weights` appare come `<select>` (`DATAFRAME_PARAM_ALGOS` in `backend/services/algo_registry.py:37`). Nomi child maiuscoli se si usa `WeighSpecified` (Tutorial 10-D); con `WeighTarget` le colonne devono matchare i nomi dei child (`SPHMV`/`SHY`) — rinominare coerentemente signal e nodi.
+
+### Step C3 — run e lettura
+
+1. **Save** (`SPDVC`), poi **Run** (stessi prezzi, no commission).
+2. In **Results**: **Equity** ≈ `report2.plot()`; **Weights (%)** ≈ `security_weights.plot.area()` (area `SPHMV` vs `SHY`: `SHY` sale quando la vol 20gg di `IVV` supera il 20%); **Metrics** ≈ `report2.display()` con risk-free 1% (la GUI mostra Sharpe a risk-free 0 — differenza trascurabile su equity, vedi Tutorial 10).
+
+Valori attesi (articolo, 2002-07-29 → 2020-01-31, risk-free 1%):
+
+| Metrica | SP500 | SPHMV | SPDVC |
+|---------|-------|-------|-------|
+| Total Return | ~405% | ~475% | ~572% |
+| CAGR | ~9,7% | ~10,5% | ~11,5% |
+| Max Drawdown | ~−55% | ~−61% | ~−41% |
+| Daily Sharpe | ~0,55 | ~0,52 | ~0,67 |
+
+> Con yfinance fino ad oggi i valori cambiano (periodo più lungo) — l'ordinamento deve restare: SPDVC più Sharpe e meno drawdown di SPHMV; SPHMV più return ma più drawdown di SP500. Nota dell'autore: il vol-control giornaliero è sensibilissimo all'esecuzione — numeri belli in backtest, difficili da replicare nel book reale.
+
+---
+
+## Spiegazione concettuale
+
+1. **Value = drawdown profondo.** `StatDrawdown(10y)` misura quanto ciascun settore è lontano dal suo massimo decennale (`to_drawdown_series`); `SelectN(5 asc)` tiene i 5 più "puniti" — ipotesi: settori depressi = cheap = rimbalzo atteso.
+2. **Momentum = information ratio, non return lordo.** `StatInfoRatio(7m, lag 1m vs IVV)` classifica i 5 su return attivo aggiustato per tracking-error; `SelectN(3 desc)` tiene i 3 migliori — ipotesi: tra i cheap, comprare quelli già in ripresa vs mercato. `lag 1m` evita look-ahead sul mese in corso.
+3. **Trimestrale, non giornaliero.** `RunQuarterly` su SPHMV: screen lento (10y + 7m), turnover basso per costruzione — opposto del `RunDaily` di SPDVC che invece insegue la vol.
+4. **SPDVC = overlay, non stock-picking.** Il parent non seleziona settori: scala solo l'esposizione `SPHMV` vs `SHY` in base a `20/vol20`. Quando la vol esplode (2008, 2020), `w` crolla e il portafoglio si rifugia in SHY — da qui il drawdown quasi dimezzato vs SPHMV puro.
+
+---
+
+## Suggerimenti aggiuntivi
+
+- **Validazione (4° blog dell'autore):** il follow-up *Backtest Validation* mostra precision ~50% (moneta) dello screen nel predire outperformer trimestrali e suggerisce di escludere `IYZ`/`IDU` (telecom/utilities: dividendo difensivo, poco adatti a screen momentum) — provare l'universo senza i difensivi e confrontare in overlay.
+- **Sensibilità lookback:** duplicare `SPHMV` con `lookback months=3/7/12` di `SelectMomentum`/`StatInfoRatio` (Tutorial 10-B) prima di toccare il pooled.
+- **Target vol diverso:** ricalcolare `vol_target_*` con `target_vol` 10/15 e confrontare SPDVC in overlay — target più basso = più SHY = meno drawdown ma meno return.
+- **Salvare:** **Save** per ciascuna variante (`SP500`, `SPESW`, `SPHMV`, `SPDVC`).
