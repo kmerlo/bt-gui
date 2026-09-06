@@ -27,6 +27,7 @@ class RunRequest(BaseModel):
     price_source_id: int | None = None
     extra_source_ids: dict[str, int] = {}
     indicator_source_ids: list[int] = []
+    ticker_tax_profiles: dict[str, int] = {}
 
 
 @router.post("/backtest", status_code=201)
@@ -54,6 +55,26 @@ def create_backtest(req: RunRequest, db: Session = Depends(get_db)):  # noqa: B0
     from backend.services.benchmark import normalize_ticker
 
     cfg_dict["benchmark_ticker"] = normalize_ticker(req.benchmark_ticker)
+
+    # ponytail: snapshot aliquote per ticker — i run vecchi non cambiano se editi i profili
+    cfg = req.config.model_copy(deep=True)
+    if req.ticker_tax_profiles:
+        from backend.database import TaxProfile as DBTaxProfile
+
+        prof_rows = db.query(DBTaxProfile).filter(
+            DBTaxProfile.id.in_(list(req.ticker_tax_profiles.values()))
+        ).all()
+        by_id = {r.id: r for r in prof_rows}
+        snap = {}
+        for ticker, pid in req.ticker_tax_profiles.items():
+            prow = by_id.get(pid)
+            if prow is None:
+                continue
+            snap[str(ticker).upper()] = {"gain_rate": float(prow.gain_rate), "div_rate": float(prow.div_rate)}
+        cfg.tax.ticker_rates = snap  # type: ignore[assignment]
+        cfg_dict.setdefault("tax", {})
+        if isinstance(cfg_dict["tax"], dict):
+            cfg_dict["tax"]["ticker_rates"] = snap
 
     # ponytail: validate BEFORE insert — every 4xx below must not leave a ghost run row
     tickers = [t.upper() for t in req.tickers] if req.tickers else []
@@ -167,7 +188,7 @@ def create_backtest(req: RunRequest, db: Session = Depends(get_db)):  # noqa: B0
     try:
         from backend.services.backtest_progress import schedule_backtest
 
-        schedule_backtest(run_id, tree, req.config, price_df, additional, volume, volatility, indicators)
+        schedule_backtest(run_id, tree, cfg, price_df, additional, volume, volatility, indicators)
     except Exception as e:
         raise HTTPException(status_code=500, detail=_err_msg(e))
     return {"id": run_id, "status": "running", "warnings": indicator_warnings}

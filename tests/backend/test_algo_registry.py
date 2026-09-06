@@ -1,5 +1,8 @@
 from backend.services.algo_registry import REGISTRY, algo_json_schema, build_algo
 
+import pandas as pd
+import pytest
+
 
 def test_registry_contains_key_algos():
     for name in ["RunMonthly", "WeighEqually", "Rebalance", "SelectAll"]:
@@ -50,3 +53,32 @@ def test_requires_sets_extracted():
     has_requires = any(v.get("requires") for v in REGISTRY.values())
     has_sets = any(v.get("sets") for v in REGISTRY.values())
     assert has_requires or has_sets
+
+
+def test_dateoffset_params_parsed():
+    algo = build_algo("SelectMomentum", {"n": "4", "lookback": "months=6"})
+    assert algo.algos[0].lookback == pd.DateOffset(months=6)
+    algo = build_algo("WeighERC", {"lookback": "years=1, days=0"})
+    assert algo.lookback == pd.DateOffset(years=1, days=0)
+
+
+def test_dateoffset_invalid_raises():
+    with pytest.raises(ValueError, match="Invalid DateOffset"):
+        build_algo("SelectMomentum", {"n": 4, "lookback": "6"})
+    with pytest.raises(ValueError, match="Invalid DateOffset"):
+        build_algo("WeighInvVol", {"lookback": "fortnights=2"})
+
+
+def test_empty_optional_params_dropped_to_default():
+    algo = build_algo("SelectMomentum", {"n": 4, "lookback": "", "lag": "  "})
+    assert algo.algos[0].lookback == pd.DateOffset(months=3)
+    assert build_algo("WeighSpecified", {"weights": ""}).weights == {}
+
+
+def test_empty_required_param_raises():
+    with pytest.raises(ValueError, match="requires param 'date'"):
+        build_algo("RunAfterDate", {"date": ""})
+
+
+def test_var_keyword_not_required():
+    assert REGISTRY["WeighSpecified"]["params"]["weights"]["required"] is False

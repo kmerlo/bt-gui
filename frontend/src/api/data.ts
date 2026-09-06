@@ -1,4 +1,5 @@
 import { API_BASE, request } from './request'
+import type { UsageResponse } from '../types/bt'
 import type { PriceTickerRow } from './price'
 
 export type DataSourceRow = { id: number; name: string; type: string; source: string; meta: Record<string, unknown>; path_or_tickers: string }
@@ -98,4 +99,5 @@ export const dataApi = {
       body: JSON.stringify({ adapter, ...params }),
     }),
   listUnified: () => request<UnifiedDataList>('/api/bt/data/list'),
+  usage: () => request<UsageResponse>('/api/bt/usage'),
 }

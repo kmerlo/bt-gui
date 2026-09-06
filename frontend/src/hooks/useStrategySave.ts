@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import type { NodeConfig, StrategyTree } from '../types/bt'
 import { useBtStore, buildPresetForTree } from '../bt/store/btStore'
 import { createDefaultTree } from '../bt/store/treeOps'
-import { strategiesApi } from '../api/bt'
+import { collectReferencedIds } from '../bt/utils/collectIds'
+import { dataApi, strategiesApi } from '../api/bt'
 
 export function findDuplicateName(root: NodeConfig): string | null {
   const findDup = (node: NodeConfig): string | null => {
@@ -30,6 +31,28 @@ function assembleTreeToSave(tree: StrategyTree, targetName: string): StrategyTre
     root: { ...tree.root, name: targetName },
     preset,
   } as unknown as StrategyTree
+}
+
+// Fotografia dei link indicatori/segnali: gli IDs referenziati negli algo vengono
+// partizionati per tipo e scritti in preset. Fallback: tutto in indicator_source_ids
+// (il BE li risolve comunque e segnala gli stale con warning).
+async function snapshotIds(toSave: StrategyTree): Promise<StrategyTree> {
+  const collected = collectReferencedIds(toSave)
+  const preset = { ...(toSave.preset as unknown as Record<string, unknown>) }
+  if (collected.length === 0) {
+    preset.indicator_source_ids = []
+    preset.signal_source_ids = []
+    return { ...toSave, preset } as unknown as StrategyTree
+  }
+  try {
+    const sigs = await dataApi.listSignals()
+    const sigSet = new Set(sigs.map((s) => s.id))
+    preset.indicator_source_ids = collected.filter((id) => !sigSet.has(id))
+    preset.signal_source_ids = collected.filter((id) => sigSet.has(id))
+  } catch { /* offline? salva tutto come indicatori, il BE avvisa sugli stale */ }
+  if (preset.indicator_source_ids === undefined) preset.indicator_source_ids = collected
+  if (preset.signal_source_ids === undefined) preset.signal_source_ids = []
+  return { ...toSave, preset } as unknown as StrategyTree
 }
 
 export function useStrategySave() {
@@ -69,7 +92,7 @@ export function useStrategySave() {
       return
     }
     const targetName = nameDraft.trim() || freshTree.name
-    const toSave = assembleTreeToSave(freshTree, targetName)
+    const toSave = await snapshotIds(assembleTreeToSave(freshTree, targetName))
     try {
       if (savedId != null) {
         const r = await strategiesApi.update(savedId, toSave)
@@ -104,7 +127,7 @@ export function useStrategySave() {
       return
     }
     const targetName = nameDraft.trim() || freshTree.name
-    const toSave = assembleTreeToSave(freshTree, targetName)
+    const toSave = await snapshotIds(assembleTreeToSave(freshTree, targetName))
     try {
       const r = await strategiesApi.create(toSave)
       setSavedId(r.id)

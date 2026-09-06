@@ -1,13 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { dataApi, priceDataApi, type IndicatorDef } from '../../api/bt'
 import { useBtStore } from '../store/btStore'
+import { collectReferencedIds } from '../utils/collectIds'
 import { collectTickers } from '../utils/collectTickers'
 import DateInputIT from './DateInputIT'
 
 const S = {
   wrap: {
-    width: 260,
-    minWidth: 260,
+    flex: 1,
+    minWidth: 0,
     border: '1px solid #30363d',
     borderRadius: 8,
     background: '#0d1117',
@@ -88,6 +89,9 @@ export default function IndicatorPanel() {
   }, [defaultSelected, tree])
   const hasData = treeTickers.some((t) => availableTickers.includes(t))
   const selectedDef = defs.find((d) => d.type === selType) ?? null
+  // Saved scoped: solo gli indicatori referenziati negli algo della strategia corrente
+  const usedIds = useMemo(() => new Set(collectReferencedIds(tree)), [tree])
+  const scoped = indicators.filter((ind) => usedIds.has(ind.id))
 
   const toggleTicker = (sym: string) => {
     setSelectedTickers((prev) => prev.includes(sym) ? prev.filter((t) => t !== sym) : [...prev, sym])
@@ -118,7 +122,7 @@ export default function IndicatorPanel() {
         if (item.warnings?.length) allWarnings.push(...item.warnings)
       }
       if (results.length > 0) {
-        setMsg(`saved ${results.length} indicator(s)`)
+        setMsg(`saved ${results.length} indicator(s) — selezionali in un algo (Stack) e Salva per associarli alla strategia`)
         setIndicators((prev) => [...results, ...prev])
         setNameDraft('')
         // notify other components (AlgoStack) that indicators changed
@@ -192,7 +196,7 @@ export default function IndicatorPanel() {
 
       <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         <span style={S.label}>Name (optional)</span>
-        <input value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} placeholder="auto: TICKER_INDICATOR_params" style={S.input} />
+        <input value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} placeholder="auto: TICKER[-TICKER]_INDICATOR_params" style={S.input} />
       </label>
 
       <button type="button" style={computing ? S.btnDis : S.btn} onClick={handleCompute} disabled={computing}>
@@ -206,40 +210,46 @@ export default function IndicatorPanel() {
         </div>
       )}
 
-      {indicators.length > 0 && (
-        <>
-          <div style={{ borderTop: '1px solid #21262d', margin: '2px 0' }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={S.label}>Saved ({indicators.length})</span>
-          </div>
-          <div style={S.list}>
-            {indicators.map((ind) => (
-              <div key={ind.id} style={S.listItem}>
-                <div style={S.row}>
-                  <span style={{ flex: 1 }}>{ind.name}</span>
-                  <span style={S.badge}>{String(ind.meta?.indicator_type ?? '?')}</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      dataApi.deleteIndicator(ind.id).then(() =>
-                        setIndicators((prev) => prev.filter((x) => x.id !== ind.id))
-                      ).catch(() => { /* ignore */ })
-                    }}
-                    style={S.delBtn}
-                    title="Delete indicator"
-                  >
-                    ×
-                  </button>
-                </div>
-                {Boolean(ind.meta?.params) && (
-                  <div style={{ fontSize: 11, color: '#8b949e', marginTop: 2 }}>
-                    {Object.entries(ind.meta.params as Record<string, unknown>).map(([k, v]) => `${k}=${v}`).join(', ')}
-                  </div>
-                )}
+      <div style={{ borderTop: '1px solid #21262d', margin: '2px 0' }} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={S.label}>Saved — this strategy ({scoped.length})</span>
+      </div>
+      {scoped.length === 0 && (
+        <span style={S.msg}>
+          {indicators.length > 0
+            ? `${indicators.length} nel DB ma nessuno referenziato qui — selezionalo in un algo e Salva. Vedi tab Indicators per tutti.`
+            : 'Nessun indicatore per questa strategia.'}
+        </span>
+      )}
+      {scoped.length > 0 && (
+        <div style={S.list}>
+          {scoped.map((ind) => (
+            <div key={ind.id} style={S.listItem}>
+              <div style={S.row}>
+                <span style={{ flex: 1 }}>{ind.name}</span>
+                <span style={S.badge}>{String(ind.meta?.indicator_type ?? '?')}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!window.confirm(`Eliminare indicatore "${ind.name}"? Potrebbe essere usato anche da altre strategie (vedi tab Indicators).`)) return
+                    dataApi.deleteIndicator(ind.id).then(() =>
+                      setIndicators((prev) => prev.filter((x) => x.id !== ind.id))
+                    ).catch(() => { /* ignore */ })
+                  }}
+                  style={S.delBtn}
+                  title="Delete indicator"
+                >
+                  ×
+                </button>
               </div>
-            ))}
-          </div>
-        </>
+              {Boolean(ind.meta?.params) && (
+                <div style={{ fontSize: 11, color: '#8b949e', marginTop: 2 }}>
+                  {Object.entries(ind.meta.params as Record<string, unknown>).map(([k, v]) => `${k}=${v}`).join(', ')}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )

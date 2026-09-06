@@ -13,6 +13,8 @@ from .price_source_settings import router as price_source_settings_router
 from .runs import router as runs_router
 from .signals import router as signals_router
 from .strategies import router as strategies_router
+from .tax_profiles import router as tax_profiles_router
+from .usage import router as usage_router
 
 router = APIRouter(prefix="/api/bt", tags=["bt-gui"])
 router.include_router(health_router)
@@ -26,3 +28,5 @@ router.include_router(backtest_router)
 router.include_router(runs_router)
 router.include_router(price_source_settings_router)
 router.include_router(signals_router)
+router.include_router(tax_profiles_router)
+router.include_router(usage_router)

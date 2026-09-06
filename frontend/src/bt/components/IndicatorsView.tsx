@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { dataApi, type DataSourceRow } from '../../api/bt'
+import { useUsage } from '../../hooks/useUsage'
 import { applySearch, applySort } from '../../utils/listQuery'
 
 const PAGE_SIZES = [25, 50, 100] as const
@@ -21,15 +22,19 @@ const S = {
   msgErr: { fontSize: 12, color: '#f85149', marginBottom: 8 } as const,
 }
 
-const COLUMNS: { key: keyof DataSourceRow; label: string }[] = [
+type Row = DataSourceRow & { strategy: string }
+
+const COLUMNS: { key: keyof Row; label: string }[] = [
   { key: 'id', label: 'ID' },
   { key: 'name', label: 'Name' },
   { key: 'source', label: 'Source' },
   { key: 'path_or_tickers', label: 'Tickers' },
+  { key: 'strategy', label: 'Strategia' },
 ]
 
 export default function IndicatorsView() {
   const [indicators, setIndicators] = useState<DataSourceRow[]>([])
+  const usage = useUsage()
   const [sort, setSort] = useState<SortState>({ by: null, dir: 'asc' })
   const [filters, setFilters] = useState<FilterState>({})
   const [page, setPage] = useState(0)
@@ -49,15 +54,20 @@ export default function IndicatorsView() {
 
   useEffect(() => { refresh() }, [refresh])
 
+  const rows = useMemo<Row[]>(() => indicators.map((ind) => ({
+    ...ind,
+    strategy: usage?.indicators[String(ind.id)]?.join(', ') ?? '—',
+  })), [indicators, usage])
+
   const sortedFiltered = useMemo(() => {
-    let list = [...indicators]
+    let list = [...rows]
     for (const [key, val] of Object.entries(filters)) {
       if (!val) continue
-      list = applySearch(list, val, [key as keyof DataSourceRow])
+      list = applySearch(list, val, [key as keyof Row])
     }
     if (sort.by) list = applySort(list, sort.by, sort.dir)
     return list
-  }, [indicators, sort, filters])
+  }, [rows, sort, filters])
 
   const paged = useMemo(() => {
     const start = page * pageSize
@@ -79,7 +89,9 @@ export default function IndicatorsView() {
   }
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm(`Eliminare indicatore #${id}?`)) return
+    const names = usage?.indicators[String(id)] ?? []
+    const where = names.length > 0 ? ` (usato in: ${names.join(', ')})` : ' (non usato in alcuna strategia)'
+    if (!window.confirm(`Eliminare indicatore #${id}${where}?`)) return
     try {
       await dataApi.deleteIndicator(id)
       refresh()
@@ -130,15 +142,16 @@ export default function IndicatorsView() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td style={S.td} colSpan={5}>caricamento…</td></tr>
+              <tr><td style={S.td} colSpan={6}>caricamento…</td></tr>
             ) : sortedFiltered.length === 0 ? (
-              <tr><td style={S.td} colSpan={5}>Nessun indicatore salvato</td></tr>
+              <tr><td style={S.td} colSpan={6}>Nessun indicatore salvato</td></tr>
             ) : paged.map((ind) => (
               <tr key={ind.id}>
                 <td style={{ ...S.td, fontWeight: 600 }}>#{ind.id}</td>
                 <td style={S.td}>{ind.name}</td>
                 <td style={S.td}>{String((ind.meta as Record<string, unknown>)?.indicator_type ?? '?')}</td>
                 <td style={S.td}>{ind.path_or_tickers}</td>
+                <td style={S.td}>{ind.strategy}</td>
                 <td style={{ ...S.td, display: 'flex', gap: 4 }}>
                   <button type="button" style={S.btnView} onClick={() => {
                     window.dispatchEvent(new CustomEvent('bt-navigate-indicator', { detail: ind.id }))

@@ -94,6 +94,7 @@ export const useBtStore = create<BtStore>((set, get) => ({
       const indicatorSourceIds = (raw.indicator_source_ids as number[]) ?? []
       const cfg = (raw.config as Record<string, unknown>) ?? {}
       const commission = (cfg.commission as Record<string, unknown>) ?? {}
+      const tax = (cfg.tax as Record<string, unknown>) ?? {}
       const backtestConfig: BuilderBacktestConfig = {
         initial_capital: (cfg.initial_capital as number) ?? get().backtestConfig.initial_capital,
         integer_positions: (cfg.integer_positions as boolean) ?? get().backtestConfig.integer_positions,
@@ -102,6 +103,12 @@ export const useBtStore = create<BtStore>((set, get) => ({
         end: (cfg.end as string | null) ?? tickerEnd,
         price_column: loadSettings().price_column,
         benchmark_ticker: ((cfg.benchmark_ticker as string) ?? get().backtestConfig.benchmark_ticker ?? 'SPY').toUpperCase() || 'SPY',
+        // ponytail: backfill fiscale per strategie salvate senza tax
+        tax_enabled: (tax.enabled as boolean) ?? get().backtestConfig.tax_enabled ?? true,
+        tax_gain_rate: (tax.default_gain_rate as number) ?? get().backtestConfig.tax_gain_rate ?? 26,
+        tax_div_rate: (tax.default_div_rate as number) ?? get().backtestConfig.tax_div_rate ?? 26,
+        tax_use_carry: (tax.use_loss_carry as boolean) ?? get().backtestConfig.tax_use_carry ?? true,
+        ticker_tax_profile: ((raw.ticker_tax_profiles as Record<string, number>) ?? get().backtestConfig.ticker_tax_profile ?? {}),
       }
       const selectedId = (raw.selected_node_id as string | null) ?? null
       const next: Partial<BtStore> = {

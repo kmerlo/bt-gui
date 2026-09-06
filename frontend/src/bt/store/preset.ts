@@ -12,6 +12,11 @@ export type BuilderBacktestConfig = {
   end: string | null
   price_column: 'close' | 'adj_close'
   benchmark_ticker: string
+  tax_enabled: boolean
+  tax_gain_rate: number
+  tax_div_rate: number
+  tax_use_carry: boolean
+  ticker_tax_profile: Record<string, number>
 }
 
 export type StoredPreset = {
@@ -57,6 +62,12 @@ export function loadStoredPreset(): StoredPreset | null {
         price_column: cfg.price_column ?? loadSettings().price_column,
         // ponytail: backfill per preset salvati prima del benchmark
         benchmark_ticker: (cfg.benchmark_ticker ?? 'SPY').toUpperCase() || 'SPY',
+        // ponytail: backfill fiscale (default 26% + zainetto ON)
+        tax_enabled: cfg.tax_enabled ?? true,
+        tax_gain_rate: cfg.tax_gain_rate ?? 26,
+        tax_div_rate: cfg.tax_div_rate ?? 26,
+        tax_use_carry: cfg.tax_use_carry ?? true,
+        ticker_tax_profile: (cfg.ticker_tax_profile as Record<string, number>) ?? {},
       },
       selectedId: (p.selectedId as string | null) ?? null,
       showIndicators: Boolean(p.showIndicators),
@@ -90,6 +101,11 @@ export function defaultPreset(): StoredPreset {
       end: getToday(),
       price_column: loadSettings().price_column,
       benchmark_ticker: 'SPY',
+      tax_enabled: true,
+      tax_gain_rate: 26,
+      tax_div_rate: 26,
+      tax_use_carry: true,
+      ticker_tax_profile: {},
     },
     selectedId: null,
     showIndicators: false,
@@ -113,6 +129,13 @@ export function buildPresetForTree(get: () => BtStore): Record<string, unknown> 
       start: s.backtestConfig.start,
       end: s.backtestConfig.end,
       benchmark_ticker: s.backtestConfig.benchmark_ticker || 'SPY',
+      tax: {
+        enabled: s.backtestConfig.tax_enabled,
+        default_gain_rate: s.backtestConfig.tax_gain_rate,
+        default_div_rate: s.backtestConfig.tax_div_rate,
+        use_loss_carry: s.backtestConfig.tax_use_carry,
+      },
+      ticker_tax_profiles: s.backtestConfig.ticker_tax_profile,
     },
     selected_node_id: s.selectedId,
   }

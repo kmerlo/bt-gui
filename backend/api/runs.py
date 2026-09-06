@@ -345,7 +345,7 @@ def get_run_prices(
         values = page["price"].tolist()
         weights: dict[str, list] = {}
         for c in page.columns:
-            if c != "price":
+            if c != "price" and c not in ("price_gross", "cum_tax"):
                 weights[c] = page[c].tolist()
         return {"dates": dates, "values": values, "weights": weights, "benchmark": benchmark, "total": total, "offset": offset, "limit": limit}
     first = page.columns[0]

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { btApi, strategiesApi, backtestApi, dbApi, loadSettings, saveSettings, defaultSettings, type BtSettings, type DbInfo } from '../../api/bt'
 import { priceSourceApi } from '../../api/settings'
 import { useBtStore } from '../store/btStore'
+import TaxProfilesPanel from './TaxProfilesPanel'
 
 const S = {
   wrap: { padding: 12, color: '#c9d1d9' } as const,
@@ -230,6 +231,9 @@ export default function SettingsView() {
           {saveMsg && <span style={saveMsg === 'salvato' || saveMsg.startsWith('riprist') ? S.msgOk : S.msgErr}>{saveMsg}</span>}
         </div>
       </div>
+
+      {/* Profili fiscali globali */}
+      <TaxProfilesPanel />
 
       {/* Aspetto */}
       <div style={S.card}>

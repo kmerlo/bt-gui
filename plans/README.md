@@ -262,7 +262,9 @@ Status values: `TODO` | `IN PROGRESS` | `DONE` | `BLOCKED` (with reason) | `REJE
 - `plans/028-ws-auth-and-error-sanitization.md`
 - `plans/029-fix-runs-ghost-row-and-pagination.md`
 - `plans/030-split-backtest-runner.md`
+- `plans/031-builder-scoped-saved-and-strategy-column.md`
+- `plans/032-tax-zainetto-fiscale.md`
 
 ---
 
-*Ultimo aggiornamento: 2026-09-05 — aggiunti piani improve 025–030 (base 71f31b5)*
+*Ultimo aggiornamento: 2026-09-06 — plan 031 + 032 (tassazione/zainetto)*

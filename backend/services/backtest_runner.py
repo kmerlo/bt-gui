@@ -192,6 +192,26 @@ def run_backtest_sync(
             weights = bt_obj.weights
         except Exception:
             weights = None
+        # ponytail: fiscalità in post-process su transactions — mai dentro bt, mai fatal
+        price_gross = prices
+        tax_summary: dict[str, Any] = {"tax_enabled": False}
+        cum_tax = None
+        tx_df = None
+        try:
+            tx_df = bt_obj.strategy.get_transactions()
+        except Exception:
+            tx_df = None
+        if tx_df is not None:
+            from backend.services.tax import compute_tax_adjustment
+
+            adj = compute_tax_adjustment(
+                cfg.tax, prices, tx_df,
+                (additional or {}).get("coupons"), (additional or {}).get("dividends"),
+            )
+            prices = adj["prices"]
+            cum_tax = adj["cum_tax"]
+            tx_df = adj["tx"]
+            tax_summary = adj["summary"]
         stats: dict[str, Any] = {}
         try:
             s = prices.calc_perf_stats() if hasattr(prices, "calc_perf_stats") else {}
@@ -240,10 +260,13 @@ def run_backtest_sync(
                 except Exception:
                     clean[k] = str(v)
             stats = clean
+            # ponytail: metriche al netto + riepilogo fiscale (stats già calcolate su equity netta)
+            if tax_summary.get("tax_enabled"):
+                stats.update(tax_summary)
         except Exception as e:
             stats = {"error": _err_msg(e), "cagr": 0.0, "max_drawdown": 0.0}
         try:
-            tx = bt_obj.strategy.get_transactions()
+            tx = tx_df if tx_df is not None else bt_obj.strategy.get_transactions()
             if isinstance(tx, pd.DataFrame) and not tx.empty:
                 tbuf = io.BytesIO()
                 tx.to_parquet(tbuf)
@@ -254,6 +277,13 @@ def run_backtest_sync(
             tblob = None
         pbuf = io.BytesIO()
         pdf = pd.DataFrame({"price": prices})
+        if tax_summary.get("tax_enabled"):
+            try:
+                pdf["price_gross"] = pd.to_numeric(price_gross, errors="coerce").reindex(pdf.index).ffill()  # type: ignore[union-attr]
+                if cum_tax is not None:
+                    pdf["cum_tax"] = pd.to_numeric(cum_tax, errors="coerce").reindex(pdf.index).ffill().fillna(0.0)  # type: ignore[union-attr]
+            except Exception:
+                pass
         if weights is not None and isinstance(weights, pd.DataFrame) and not weights.empty:
             try:
                 w = weights.reindex(pdf.index)

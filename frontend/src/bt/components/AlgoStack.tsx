@@ -221,6 +221,7 @@ function AlgoItem({
                 <input
                   type="text"
                   value={(val as string) ?? ''}
+                  placeholder={typeof rawDef === 'string' && rawDef.startsWith('<DateOffset') ? 'es. months=6' : undefined}
                   onChange={(e) => onUpdate({ [k]: e.target.value })}
                   style={S.input}
                 />

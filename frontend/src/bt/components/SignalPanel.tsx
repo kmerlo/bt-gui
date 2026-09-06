@@ -1,13 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { dataApi, priceDataApi, type DataSourceRow } from '../../api/bt'
 import { useBtStore } from '../store/btStore'
+import { collectReferencedIds } from '../utils/collectIds'
 import { collectTickers } from '../utils/collectTickers'
 import Tooltip from './Tooltip'
 
 const S = {
   wrap: {
-    width: 300,
-    minWidth: 300,
+    flex: 1,
+    minWidth: 0,
     border: '1px solid #30363d',
     borderRadius: 8,
     background: '#0d1117',
@@ -95,6 +96,9 @@ export default function SignalPanel() {
     }
   }, [defaultSelected, tree])
   const hasData = treeTickers.some((t) => availableTickers.includes(t))
+  // Saved scoped: solo i segnali referenziati negli algo della strategia corrente
+  const usedIds = useMemo(() => new Set(collectReferencedIds(tree)), [tree])
+  const scoped = signals.filter((sig) => usedIds.has(sig.id))
 
   const toggleTicker = (sym: string) => {
     setSelectedTickers((prev) => prev.includes(sym) ? prev.filter((t) => t !== sym) : [...prev, sym])
@@ -143,7 +147,7 @@ export default function SignalPanel() {
         end: tickerEnd || undefined,
         indicator_ids: blocks.map((b) => Number(b.indicatorId)).filter((n) => n > 0),
       })
-      setMsg(`saved signal #${r.id}: ${r.name}`)
+      setMsg(`saved signal #${r.id}: ${r.name} — selezionalo in un algo (Stack) e Salva per associarlo alla strategia`)
       setSignals((prev) => [{ id: r.id, name: r.name, type: 'signal', source: 'computed', meta: r.meta, path_or_tickers: selectedTickers.join(',') }, ...prev])
       setNameDraft('')
       window.dispatchEvent(new Event('bt-indicator-refresh'))
@@ -266,7 +270,7 @@ export default function SignalPanel() {
               end: tickerEnd || undefined,
               mode: weightMode,
             });
-            setWeightMsg(`saved weight signal #${r.id}: ${r.name}`);
+            setWeightMsg(`saved weight signal #${r.id}: ${r.name} — selezionalo in un algo (Stack) e Salva per associarlo alla strategia`);
             setSignals((prev) => [{ id: r.id, name: r.name, type: 'signal', source: 'computed_weight', meta: r.meta, path_or_tickers: selectedTickers.join(',') }, ...prev]);
             window.dispatchEvent(new Event('bt-indicator-refresh'));
           } catch (e) { setWeightMsg(String(e)); }
@@ -277,26 +281,32 @@ export default function SignalPanel() {
       </div>
       {weightMsg && <span style={S.err}>{weightMsg}</span>}
 
-      {signals.length > 0 && (
-        <>
-          <div style={{ borderTop: '1px solid #21262d', margin: '2px 0' }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={S.label}>Saved ({signals.length})</span>
-          </div>
-          <div style={S.list}>
-            {signals.map((sig) => (
-              <div key={sig.id} style={S.listItem}>
-                <div style={S.row}>
-                  <span style={{ flex: 1 }}>{sig.name}</span>
-                  <span style={S.badge}>signal</span>
-                  <button type="button" onClick={() => {
-                    dataApi.deleteSignal(sig.id).then(() => setSignals((prev) => prev.filter((x) => x.id !== sig.id))).catch(() => { /* ignore */ })
-                  }} style={S.delBtn} title="Delete signal">×</button>
-                </div>
+      <div style={{ borderTop: '1px solid #21262d', margin: '2px 0' }} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={S.label}>Saved — this strategy ({scoped.length})</span>
+      </div>
+      {scoped.length === 0 && (
+        <span style={S.msg}>
+          {signals.length > 0
+            ? `${signals.length} nel DB ma nessuno referenziato qui — selezionalo in un algo e Salva. Vedi tab Signals per tutti.`
+            : 'Nessun segnale per questa strategia.'}
+        </span>
+      )}
+      {scoped.length > 0 && (
+        <div style={S.list}>
+          {scoped.map((sig) => (
+            <div key={sig.id} style={S.listItem}>
+              <div style={S.row}>
+                <span style={{ flex: 1 }}>{sig.name}</span>
+                <span style={S.badge}>signal</span>
+                <button type="button" onClick={() => {
+                  if (!window.confirm(`Eliminare segnale "${sig.name}"? Potrebbe essere usato anche da altre strategie (vedi tab Signals).`)) return
+                  dataApi.deleteSignal(sig.id).then(() => setSignals((prev) => prev.filter((x) => x.id !== sig.id))).catch(() => { /* ignore */ })
+                }} style={S.delBtn} title="Delete signal">×</button>
               </div>
-            ))}
-          </div>
-        </>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )

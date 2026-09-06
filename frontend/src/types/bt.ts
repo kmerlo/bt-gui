@@ -553,6 +553,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/bt/runs/{run_id}/quantstats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run Quantstats */
+        get: operations["get_run_quantstats_api_bt_runs__run_id__quantstats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/bt/runs/{run_id}/quantstats/plot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run Quantstats Plot */
+        get: operations["get_run_quantstats_plot_api_bt_runs__run_id__quantstats_plot_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/bt/runs/{run_id}/quantstats/tearsheet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run Quantstats Tearsheet */
+        get: operations["get_run_quantstats_tearsheet_api_bt_runs__run_id__quantstats_tearsheet_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/bt/settings/price-source": {
         parameters: {
             query?: never;
@@ -565,6 +616,127 @@ export interface paths {
         put?: never;
         /** Set Price Source Setting */
         post: operations["set_price_source_setting_api_bt_settings_price_source_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/bt/signals/compute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Compute Signal */
+        post: operations["compute_signal_api_bt_signals_compute_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/bt/signals/compute-weights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Compute Weight Signal */
+        post: operations["compute_weight_signal_api_bt_signals_compute_weights_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/bt/signals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Signals */
+        get: operations["list_signals_api_bt_signals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/bt/signals/{sid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Signal */
+        delete: operations["delete_signal_api_bt_signals__sid__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/bt/tax-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Tax Profiles */
+        get: operations["list_tax_profiles_api_bt_tax_profiles_get"];
+        put?: never;
+        /** Create Tax Profile */
+        post: operations["create_tax_profile_api_bt_tax_profiles_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/bt/tax-profiles/{pid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Tax Profile */
+        put: operations["update_tax_profile_api_bt_tax_profiles__pid__put"];
+        post?: never;
+        /** Delete Tax Profile */
+        delete: operations["delete_tax_profile_api_bt_tax_profiles__pid__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/bt/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Usage */
+        get: operations["get_usage_api_bt_usage_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -642,6 +814,17 @@ export interface components {
              * @enum {string}
              */
             price_column: "close" | "adj_close";
+            /**
+             * @default {
+             *       "enabled": true,
+             *       "default_gain_rate": 26,
+             *       "default_div_rate": 26,
+             *       "use_loss_carry": true,
+             *       "carry_expiry_years": 4,
+             *       "ticker_rates": {}
+             *     }
+             */
+            tax: components["schemas"]["TaxConfig"];
         };
         /** Body_upload_data_source_api_bt_data_sources_upload_post */
         Body_upload_data_source_api_bt_data_sources_upload_post: {
@@ -666,6 +849,8 @@ export interface components {
             };
             /** Indicator Source Ids */
             indicator_source_ids?: number[];
+            /** Signal Source Ids */
+            signal_source_ids?: number[];
             config?: components["schemas"]["BacktestConfig"];
             /** Selected Node Id */
             selected_node_id?: string | null;
@@ -727,6 +912,56 @@ export interface components {
             save: boolean;
             /** Name */
             name?: string | null;
+        };
+        /** ComputeSignalRequest */
+        ComputeSignalRequest: {
+            /** Name */
+            name: string;
+            /** Expression */
+            expression: {
+                [key: string]: unknown;
+            };
+            /** Symbols */
+            symbols: string[];
+            /** Start */
+            start?: string | null;
+            /** End */
+            end?: string | null;
+            /**
+             * Indicator Ids
+             * @default []
+             */
+            indicator_ids: number[];
+            /**
+             * Save
+             * @default true
+             */
+            save: boolean;
+        };
+        /** ComputeWeightSignalRequest */
+        ComputeWeightSignalRequest: {
+            /** Name */
+            name?: string | null;
+            /** Fast Indicator Id */
+            fast_indicator_id: number;
+            /** Slow Indicator Id */
+            slow_indicator_id: number;
+            /** Symbols */
+            symbols: string[];
+            /** Start */
+            start?: string | null;
+            /** End */
+            end?: string | null;
+            /**
+             * Save
+             * @default true
+             */
+            save: boolean;
+            /**
+             * Mode
+             * @default 1/-1
+             */
+            mode: string;
         };
         /** DataFetchRequest */
         DataFetchRequest: {
@@ -825,7 +1060,15 @@ export interface components {
              *       },
              *       "integer_positions": true,
              *       "progress_bar": false,
-             *       "price_column": "close"
+             *       "price_column": "close",
+             *       "tax": {
+             *         "carry_expiry_years": 4,
+             *         "default_div_rate": 26,
+             *         "default_gain_rate": 26,
+             *         "enabled": true,
+             *         "ticker_rates": {},
+             *         "use_loss_carry": true
+             *       }
              *     }
              */
             config: components["schemas"]["BacktestConfig"];
@@ -834,6 +1077,8 @@ export interface components {
              * @default []
              */
             tickers: string[];
+            /** Benchmark Ticker */
+            benchmark_ticker?: string | null;
             /** Price Source Id */
             price_source_id?: number | null;
             /**
@@ -848,6 +1093,13 @@ export interface components {
              * @default []
              */
             indicator_source_ids: number[];
+            /**
+             * Ticker Tax Profiles
+             * @default {}
+             */
+            ticker_tax_profiles: {
+                [key: string]: number;
+            };
         };
         /** SetPriceSourceRequest */
         SetPriceSourceRequest: {
@@ -870,6 +1122,80 @@ export interface components {
         SwitchDbRequest: {
             /** Db */
             db: string;
+        };
+        /** TaxConfig */
+        TaxConfig: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Default Gain Rate
+             * @default 26
+             */
+            default_gain_rate: number;
+            /**
+             * Default Div Rate
+             * @default 26
+             */
+            default_div_rate: number;
+            /**
+             * Use Loss Carry
+             * @default true
+             */
+            use_loss_carry: boolean;
+            /**
+             * Carry Expiry Years
+             * @default 4
+             */
+            carry_expiry_years: number;
+            /**
+             * Ticker Rates
+             * @default {}
+             */
+            ticker_rates: {
+                [key: string]: components["schemas"]["TaxTickerRate"];
+            };
+        };
+        /** TaxProfileIn */
+        TaxProfileIn: {
+            /** Name */
+            name: string;
+            /**
+             * Gain Rate
+             * @default 26
+             */
+            gain_rate: number;
+            /**
+             * Div Rate
+             * @default 26
+             */
+            div_rate: number;
+        };
+        /** TaxTickerRate */
+        TaxTickerRate: {
+            /**
+             * Gain Rate
+             * @default 26
+             */
+            gain_rate: number;
+            /**
+             * Div Rate
+             * @default 26
+             */
+            div_rate: number;
+        };
+        /** UsageResponse */
+        UsageResponse: {
+            /** Indicators */
+            indicators: {
+                [key: string]: string[];
+            };
+            /** Signals */
+            signals: {
+                [key: string]: string[];
+            };
         };
         /** ValidationError */
         ValidationError: {
@@ -2001,6 +2327,104 @@ export interface operations {
                 end?: string | null;
                 limit?: number;
                 offset?: number;
+                benchmark_ticker?: string | null;
+            };
+            header?: never;
+            path: {
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_quantstats_api_bt_runs__run_id__quantstats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_quantstats_plot_api_bt_runs__run_id__quantstats_plot_get: {
+        parameters: {
+            query?: {
+                kind?: string;
+            };
+            header?: never;
+            path: {
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_quantstats_tearsheet_api_bt_runs__run_id__quantstats_tearsheet_get: {
+        parameters: {
+            query?: {
+                download?: boolean;
             };
             header?: never;
             path: {
@@ -2083,6 +2507,258 @@ export interface operations {
             };
         };
     };
+    compute_signal_api_bt_signals_compute_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ComputeSignalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    compute_weight_signal_api_bt_signals_compute_weights_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ComputeWeightSignalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_signals_api_bt_signals_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    delete_signal_api_bt_signals__sid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sid: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_tax_profiles_api_bt_tax_profiles_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    create_tax_profile_api_bt_tax_profiles_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaxProfileIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_tax_profile_api_bt_tax_profiles__pid__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaxProfileIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_tax_profile_api_bt_tax_profiles__pid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_usage_api_bt_usage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageResponse"];
+                };
+            };
+        };
+    };
     root__get: {
         parameters: {
             query?: never;
@@ -2105,7 +2781,14 @@ export interface operations {
     };
 }
 
-// Convenience aliases for direct imports (plan 002)
-export type StrategyTree = components["schemas"]["StrategyTree"]
-export type NodeConfig = components["schemas"]["NodeConfig"]
-export type AlgoConfig = components["schemas"]["AlgoConfig"]
+/* ponytail: alias manuali — gen:types li spazza, riaggiungere dopo ogni rigenerazione */
+export type StrategyTree = components["schemas"]["StrategyTree"];
+export type NodeConfig = components["schemas"]["NodeConfig"];
+export type AlgoConfig = components["schemas"]["AlgoConfig"];
+export type BuilderPreset = components["schemas"]["BuilderPreset"];
+export type BacktestConfig = components["schemas"]["BacktestConfig"];
+export type CommissionConfig = components["schemas"]["CommissionConfig"];
+export type TaxConfig = components["schemas"]["TaxConfig"];
+export type TaxTickerRate = components["schemas"]["TaxTickerRate"];
+export type RunRequest = components["schemas"]["RunRequest"];
+export type UsageResponse = components["schemas"]["UsageResponse"];

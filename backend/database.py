@@ -157,6 +157,14 @@ class BacktestRun(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
+class TaxProfile(Base):
+    __tablename__ = "tax_profiles"
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True, index=True)
+    gain_rate = Column(Float, default=26.0)
+    div_rate = Column(Float, default=26.0)
+
+
 def init_db() -> None:
     Base.metadata.create_all(bind=engine_main)
     Base.metadata.create_all(bind=engine_test)

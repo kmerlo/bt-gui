@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { backtestApi, priceDataApi } from '../../api/bt'
 import type { NodeConfig } from '../../types/bt'
 import { useBtStore } from '../store/btStore'
+import { collectReferencedIds } from '../utils/collectIds'
 import { collectTickers } from '../utils/collectTickers'
 import DateInputIT from './DateInputIT'
+import TaxPanel, { validateTaxRate } from './TaxPanel'
 
 const S = {
   wrap: { border: '1px solid #30363d', borderRadius: 8, padding: 12, background: '#0d1117', color: '#c9d1d9' } as const,
@@ -140,6 +142,9 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
     if (!tree) { setMsg('no tree'); return }
     if (selectedTickers.length === 0) { setMsg('select at least one ticker'); return }
     if (fnError) { setMsg(fnError); return }
+    if (backtestConfig.tax_enabled && (validateTaxRate(backtestConfig.tax_gain_rate) || validateTaxRate(backtestConfig.tax_div_rate))) {
+      setMsg('aliquota fiscale 0..100'); return
+    }
     if (missingTickers.length > 0) {
       const ok = window.confirm(
         `Dati mancanti per: ${missingTickers.join(', ')} — fetch in Ticker Catalog.\n` +
@@ -190,24 +195,21 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
       start: tickerStart,
       end: tickerEnd,
       price_column: backtestConfig.price_column,
+      tax: {
+        enabled: backtestConfig.tax_enabled,
+        default_gain_rate: backtestConfig.tax_gain_rate,
+        default_div_rate: backtestConfig.tax_div_rate,
+        use_loss_carry: backtestConfig.tax_use_carry,
+      },
     }
-    const referencedIds = (() => {
-      const ids = new Set<number>(indicatorSourceIds)
-      const walk = (node: unknown) => {
-        if (!node || typeof node !== 'object') return
-        const n = node as Record<string, unknown>
-        if (Array.isArray(n.algos)) {
-          for (const a of n.algos as Array<Record<string, unknown>>) {
-            const params = a.params as Record<string, unknown> | undefined
-            if (params) for (const v of Object.values(params)) if (typeof v === 'string' && /^\d+$/.test(v.trim())) ids.add(Number(v))
-          }
-        }
-        if (Array.isArray(n.children)) for (const c of n.children) walk(c)
-        if (n.root) walk(n.root)
-      }
-      walk(tree as unknown)
-      return [...ids]
-    })()
+    // ponytail: mapping profili solo per ticker selezionati
+    const tickerTaxProfiles: Record<string, number> = {}
+    for (const t of selectedTickers) {
+      const pid = backtestConfig.ticker_tax_profile[t]
+      if (pid != null) tickerTaxProfiles[t] = pid
+    }
+    // ponytail: walk condiviso in utils/collectIds (include preset salvati)
+    const referencedIds = [...new Set([...indicatorSourceIds, ...collectReferencedIds(tree)])].sort((a, b) => a - b)
     if (referencedIds.length !== indicatorSourceIds.length || referencedIds.some((id, i) => id !== indicatorSourceIds[i])) {
       setIndicatorSourceIds(referencedIds)
     }
@@ -219,6 +221,7 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
         benchmark_ticker: benchmarkTicker.trim().toUpperCase() || null,
         extra_source_ids: extraSourceIds,
         indicator_source_ids: referencedIds,
+        ticker_tax_profiles: tickerTaxProfiles,
       })
       onRunCreated?.(res.id)
       if (res.warnings?.length) {
@@ -318,6 +321,7 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
         placeholder="lambda q,p: max(1, abs(q)*0.01)"
       />
       {fnError && <div style={{ color: '#f85149', fontSize: 12, marginTop: 4 }}>{fnError}</div>}
+      <TaxPanel tickers={selectedTickers} />
       <button type="button" style={running ? S.btnDis : S.btn} onClick={handleRun} disabled={running}>
         {running ? 'Running…' : 'Run'}
       </button>

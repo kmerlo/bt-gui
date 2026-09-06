@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { dataApi, type DataSourceRow } from '../../api/bt'
+import { useUsage } from '../../hooks/useUsage'
 import { applySearch, applySort } from '../../utils/listQuery'
 
 const PAGE_SIZES = [25, 50, 100] as const
@@ -21,15 +22,19 @@ const S = {
   msgErr: { fontSize: 12, color: '#f85149', marginBottom: 8 } as const,
 }
 
-const COLUMNS: { key: keyof DataSourceRow; label: string }[] = [
+type Row = DataSourceRow & { strategy: string }
+
+const COLUMNS: { key: keyof Row; label: string }[] = [
   { key: 'id', label: 'ID' },
   { key: 'name', label: 'Name' },
   { key: 'source', label: 'Source' },
   { key: 'path_or_tickers', label: 'Tickers' },
+  { key: 'strategy', label: 'Strategia' },
 ]
 
 export default function SignalsView() {
   const [signals, setSignals] = useState<DataSourceRow[]>([])
+  const usage = useUsage()
   const [sort, setSort] = useState<SortState>({ by: null, dir: 'asc' })
   const [filters, setFilters] = useState<FilterState>({})
   const [page, setPage] = useState(0)
@@ -47,15 +52,20 @@ export default function SignalsView() {
 
   useEffect(() => { refresh() }, [refresh])
 
+  const rows = useMemo<Row[]>(() => signals.map((sig) => ({
+    ...sig,
+    strategy: usage?.signals[String(sig.id)]?.join(', ') ?? '—',
+  })), [signals, usage])
+
   const sortedFiltered = useMemo(() => {
-    let list = [...signals]
+    let list = [...rows]
     for (const [key, val] of Object.entries(filters)) {
       if (!val) continue
-      list = applySearch(list, val, [key as keyof DataSourceRow])
+      list = applySearch(list, val, [key as keyof Row])
     }
     if (sort.by) list = applySort(list, sort.by, sort.dir)
     return list
-  }, [signals, sort, filters])
+  }, [rows, sort, filters])
 
   const paged = useMemo(() => {
     const start = page * pageSize
@@ -77,7 +87,9 @@ export default function SignalsView() {
   }
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm(`Eliminare signal #${id}?`)) return
+    const names = usage?.signals[String(id)] ?? []
+    const where = names.length > 0 ? ` (usato in: ${names.join(', ')})` : ' (non usato in alcuna strategia)'
+    if (!window.confirm(`Eliminare signal #${id}${where}?`)) return
     try {
       await dataApi.deleteSignal(id)
       refresh()
@@ -128,13 +140,14 @@ export default function SignalsView() {
           </thead>
           <tbody>
             {sortedFiltered.length === 0 ? (
-              <tr><td style={S.td} colSpan={5}>Nessun signal salvato</td></tr>
+              <tr><td style={S.td} colSpan={6}>Nessun signal salvato</td></tr>
             ) : paged.map((sig) => (
               <tr key={sig.id}>
                 <td style={{ ...S.td, fontWeight: 600 }}>#{sig.id}</td>
                 <td style={S.td}>{sig.name}</td>
                 <td style={S.td}>{sig.source}</td>
                 <td style={S.td}>{sig.path_or_tickers}</td>
+                <td style={S.td}>{sig.strategy}</td>
                 <td style={{ ...S.td, display: 'flex', gap: 4 }}>
                   <button type="button" style={S.btnView} onClick={() => {
                     window.dispatchEvent(new CustomEvent('bt-navigate-signal', { detail: sig.id }))

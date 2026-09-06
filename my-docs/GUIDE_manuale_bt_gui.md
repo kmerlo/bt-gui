@@ -17,7 +17,9 @@ bt-gui ha 5 viste (sidebar hash routing `App.tsx`): **Builder**, **Results**, **
 - **Inspector** a destra: modifica `name`, `type`, `params`; se `Strategy` mostra **Algo Stack** (add/remove/reorder, form auto da `GET /api/bt/algos/{name}/schema`).
 - **Commission simple_fn**: campo `lambda q,p: q*p*0.001` con validazione regex FE e whitelist AST BE (`backend/services/commission_parser.py` permette `max/min/abs/round` e aritmetica). Lascia vuoto per nessuna commissione.
 - **Benchmark ticker (buy&hold)**: campo nel box Run Backtest, default `SPY`. Comprato a inizio strategia e tenuto fino alla fine — serve da confronto. Vuoto = nessun benchmark. Il ticker deve avere dati in Ticker Catalog (stesso `price_column` della strategia), altrimenti il pannello benchmark mostra "nessun dato".
-- **Save/Load**: toolbar `Save` persiste su `strategies` (SQLite), `Save as new` duplica; load da dropdown.
+- **Tassazione**: checkbox nel box Run Backtest + aliquota Gain % e Dividendi % (default 26%). La tassa sui gain scatta subito a ogni chiusura profittevole e l'equity mostrata è già al netto; le perdite alimentano lo **zainetto fiscale** (checkbox dedicata) che compensa i gain successivi fino a concorrenza, con scadenza al 31/12 del 4° anno dopo la perdita. Dividendi/coupon sempre tassati all'incasso, mai compensati. Sotto "Profili per ticker" puoi associare a ogni ticker un profilo globale (Settings → Profili fiscali: es. Governativi 12,5%, USA dividendi 37%); i ticker senza profilo usano le aliquote default. Ogni run salva uno snapshot delle aliquote: modificare un profilo non altera i run esistenti. Dividendi da CSV manuale (colonne=ticker, valori=cash totale accreditato).
+- **Save/Load**: toolbar `Save` persiste su `strategies` (SQLite), `Save as new` duplica; load da dropdown. Il Salva fotografa anche i link indicatori/segnali usati (`preset.indicator/signal_source_ids`).
+- **Indicators/Signals nel builder**: le liste "Saved" mostrano solo quelli referenziati negli algo della strategia corrente (strategia nuova → vuote). Dopo "Compute & Save", seleziona l'indicatore/segnale in un algo dello Stack e premi Save per associarlo. Tutti gli indicatori/segnali restano visibili nei tab dedicati, con colonna **Strategia** (nomi separati da virgola, `—` se orfano); la conferma di delete mostra dove sono usati.
 - **Ticker Catalog**: i Security `name` devono corrispondere a ticker in `price_data` (upper-case, es. `AAPL`).
 
 ## 2. Results — RunsTable + metriche
@@ -28,6 +30,7 @@ bt-gui ha 5 viste (sidebar hash routing `App.tsx`): **Builder**, **Results**, **
   - **Benchmark** — tabella confronto: Total Return/CAGR/MaxDD del bench, Outperformance (strat − bench), Alpha/Beta/Correlation, Tracking error, Information ratio
   - **Weights** heatmap/table
   - **Metrics** tabella da `Result.stats`
+  - **QuantStats** (libreria `quantstats`, pannello collassabile): tab Metriche extra (sharpe/sortino/calmar/VaR/CVaR/kelly/profit factor/payoff/win rate/tail ratio/skew/kurtosis…), tab Plot (snapshot/monthly heatmap/drawdown/distribution come PNG), tab Tearsheet completo (report HTML in iframe + download ⬇). Lo snapshot usa il benchmark del run se impostato. Serie troppo corte (<3 punti) → messaggio, mai crash.
   - **Transactions** tabella paginata
   - **Drawdown** AreaSeries
 - **Compare overlay** multi-run: deferred — vedi `my-docs/GUIDE_documentazione_tecnica.md`. Attuale single `d.sel` in `ResultsDashboard.tsx`.

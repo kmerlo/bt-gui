@@ -13,6 +13,7 @@ Questo file contiene tutorial passo passo per riprodurre gli esempi tratti dalla
 | 7 | [Strategy Combination](#tutorial-strategy-combination) | [Strategy Combination](https://pmorissette.github.io/bt/examples.html#strategy-combination) | parent Combined + 2 child (EW / InvVol) su 5 ticker, monthly, analisi pesi & equity singole |
 | 8 | [Stop Loss & Take Profit](#tutorial-sl-tp) | [Using Pandas to set SL/TP](https://zachlim98.github.io/me/2020-12/Using-Pandas-to-set-SL) + esempio SPY | SPY long-only SL 5%/TP 15% con filtro SMA200 + crossUp SMA20 via StopLossTakeProfit |
 | 9 | [ERC Risk Parity](#tutorial-erc) | [Equally Weighted Risk Contributions](https://pmorissette.github.io/bt/examples.html#equally-weighted-risk-contributions-portfolio) | SPY+TLT pesati a uguale risk-contribution via WeighERC |
+| 10 | [Flexible Backtesting (Medium)](#tutorial-flex-bt) | [Flexible Backtesting with BT](https://medium.com/@richardhwlin/flexible-backtesting-with-bt-7295c0dde5dd) (Richard L) | pesi fissi 80/20-60/40-40/60, rotation momentum, ottimizzazione EW/ERC/InvVol, pooled 80/20 con children |
 
 ---
 
@@ -1574,12 +1575,12 @@ Con il root `erc` selezionato, nell'**Inspector** → **Algo Stack — 0 algos**
 |--------|------|------------------------|
 | 1 | RunAfterDays | **days**: `121` (= `20*6+1` dell'esempio: ~6 mesi di warmup affinché la covarianza abbia dati sufficienti) |
 | 2 | SelectAll | nessun parametro (seleziona SPY+TLT; vedi nota sotto su `SelectThese`) |
-| 3 | WeighERC | **covar_method**: `standard` <br> **risk_parity_method**: `slsqp` <br> **maximum_iterations**: `1000` <br> **tolerance**: `1e-9` <br> **lookback** e **lag**: lasciare **vuoti** (= default 3 mesi / 0 giorni; vedi nota) |
+| 3 | WeighERC | **covar_method**: `standard` <br> **risk_parity_method**: `slsqp` <br> **maximum_iterations**: `1000` <br> **tolerance**: `1e-9` <br> **lookback**: `days=120` (= `20*6` giorni dell'esempio) <br> **lag**: `days=1` (come `lag` originale) |
 | 4 | Rebalance | nessun parametro |
 
 > **Perché `SelectAll` e non `SelectThese(['SPY','TLT'])` come nell'originale?** `SelectThese.tickers` è un parametro **lista**, ma la GUI espone ogni parametro algo come singolo campo testo (`frontend/src/bt/components/AlgoStack.tsx:218` + `backend/services/algo_registry.py:289` — tutto `type: string`). Una stringa `"SPY,TLT"` arriverebbe a bt come scalare e romperebbe la selezione. Con solo 2 Security nell'albero, `SelectAll` seleziona esattamente `SPY`+`TLT` — identico a `SelectThese`, con zero differenze economiche. (L'`rf` dell'esempio non va escluso perché in bt-gui non esiste come Security: il cash è implicito.)
 >
-> **Perché `lookback`/`lag` restano ai default?** Stesso motivo tecnico: sono `DateOffset` pandas, non esprimibili come testo nel campo GUI (`_coerce_param_value` in `backend/services/algo_registry.py:136` gestisce solo bool/numerici). I default bt (`lookback` 3 mesi, `lag` 0) sono una buona approssimazione dei 6 mesi/1 giorno originali su dati reali. I 4 parametri impostati (`covar_method`, `risk_parity_method`, `maximum_iterations`, `tolerance`) sono stringhe/numeri e passano invariati — replica fedele del setup di ottimizzazione originale (richiede `scipy`, presente nelle dipendenze BE per il metodo `slsqp`).
+> **Sintassi `lookback`/`lag`:** sono `DateOffset` pandas e si impostano come testo `days=120` / `months=6` / `years=1` (parser in `backend/services/algo_registry.py:_parse_dateoffset`; il campo mostra placeholder `es. months=6`). Qui `days=120` + `days=1` replicano esattamente `lookback=DateOffset(days=20*6)`, `lag=DateOffset(days=1)` dell'esempio. I 4 parametri ottimizzazione (`covar_method`, `risk_parity_method`, `maximum_iterations`, `tolerance`) sono stringhe/numeri e passano invariati — replica fedele del setup originale (richiede `scipy`, presente nelle dipendenze BE per il metodo `slsqp`).
 >
 > **Campo `tolerance`:** digitare `1e-9` — il BE lo converte in `float` perché il default è `float` (`1e-08`).
 >
@@ -1641,3 +1642,191 @@ Valori attesi con dati sintetici dell'esempio originale (`foo` 20% / `bar` 5% / 
 - **Salvare la strategia:** cliccare **Save** con nome `erc` per persistere l'albero in SQLite.
 
 ---
+
+<a name="tutorial-flex-bt"></a>
+
+# Tutorial 10 — Flexible Backtesting with BT (Richard L, Medium)
+
+Questo tutorial adatta l'articolo *Flexible Backtesting with BT* di Richard L (https://medium.com/@richardhwlin/flexible-backtesting-with-bt-7295c0dde5dd): 4 blocchi in sequenza — portafogli a **pesi fissi**, **rotation momentum**, **ottimizzazione di portafoglio** (MeanVar/ERC/InvVol) e **pooled portfolio** (fund-of-funds via `children`). Periodo articolo: 2012-02-23 → 2020-03-06.
+
+Codice originale bt (universo articolo):
+
+```python
+import bt
+tickers = {
+  'equity': ['ITOT','IVV','IJH','IJR','IUSG','IUSV','IJK','IJJ','IJS','IJT','OEF','IWC'],
+  'bond':   ['AGG','LQD','GOVT','MBB','MUB','TIP','SHY','IEF','TLT','HYG','FLOT','CMBS'],
+}
+prices = bt.data.get(tickers['equity'] + tickers['bond'])
+```
+
+> In bt-gui i prezzi vengono da yfinance (`Ticker Catalog`), non da `bt.data.get` — tutti i 24 ETF esistono su yahoo e sono scaricabili. Per un primo test basta un sottoinsieme (vedi note per parte); la replica pedissequa richiede i 24 fetch uno alla volta.
+
+## Mappa di replicabilità (onesta)
+
+| Blocco articolo | Algo chiave | In bt-gui |
+|-----------------|-------------|-----------|
+| A — pesi fissi 80/20, 60/40, 40/60 | `RunQuarterly, WeighSpecified` | ✅ replica fedele |
+| B — rotation momentum 3m/6m/9m/1y | `SelectMomentum(n, lookback)` | ✅ replica fedele: `lookback` si imposta come testo `months=3/6/9`, `years=1` (parser BE) |
+| C — MeanVar / ERC / InvVol | `WeighMeanVar, WeighERC, WeighInvVol` | ✅ replica fedele (`cvxopt` installato; `lookback` come `years=1`) |
+| D — pooled 80/20 con children | `children=[equity,bond]` + `WeighSpecified` | ✅ replica fedele (pattern Tutorial 7) |
+
+## Prerequisiti
+
+- Backend `http://localhost:8001` + Frontend `http://localhost:3001`
+- Nessun price source pre-esistente necessario (Step 1)
+
+---
+
+## Step 1 — caricare i dati di prezzo
+
+1. Nel menu cliccare **Ticker Catalog** (vista Data).
+2. Campo **TICKER**: `ITOT` — **Start**: `2012-01-01` (un mese di margine prima del 2012-02-23 dell'articolo) — lasciare vuoto End.
+3. Cliccare **Fetch** e attendere `count` >0.
+4. Ripetere per `AGG` (minimo per la Parte A). Per le Parti B/D aggiungere gli altri ETF delle liste sopra (uno alla volta; bastano anche sottoinsiemi — vedi note).
+
+> `ITOT` (iShares Total US Stock) + `AGG` (iShares Core US Aggregate Bond) sono i due ticker dei portafogli a pesi fissi dell'articolo. Entrambi esistono dal ~2003/2004, coprono l'intervallo.
+
+---
+
+## Parte A — portafogli a pesi fissi (replica fedele)
+
+L'articolo definisce 3 strategie sullo stesso universo `prices` (tutte le 24 colonne, ma i pesi puntano solo 2 ticker):
+
+```python
+aggressive   = bt.Strategy('aggressive',   [bt.algos.RunQuarterly(), bt.algos.SelectAll(), bt.algos.WeighSpecified(ITOT=0.8, AGG=0.2), bt.algos.Rebalance()])
+moderate     = bt.Strategy('moderate',     [bt.algos.RunQuarterly(), bt.algos.SelectAll(), bt.algos.WeighSpecified(ITOT=0.6, AGG=0.4), bt.algos.Rebalance()])
+conservative = bt.Strategy('conservative', [bt.algos.RunQuarterly(), bt.algos.SelectAll(), bt.algos.WeighSpecified(ITOT=0.4, AGG=0.6), bt.algos.Rebalance()])
+report = bt.run(backtest_aggressive, backtest_moderate, backtest_conservative)
+```
+
+### Step A2 — costruire i 3 alberi
+
+Per ciascuna variante creare un albero (Save con nome distinto) con 2 Security:
+
+```
+aggressive (Strategy)
+├── ITOT (Security)
+└── AGG  (Security)
+```
+
+(stessa struttura per `moderate` e `conservative` — cambia solo lo Stack).
+
+### Step A3 — Algo Stack (identico nei 3, cambiano solo i pesi)
+
+| Ordine | Algo | Parametri |
+|--------|------|-----------|
+| 1 | RunQuarterly | nessun parametro (default `run_on_first_date=True`) |
+| 2 | SelectAll | nessun parametro |
+| 3 | WeighSpecified | **weights**: `{"ITOT": 0.8, "AGG": 0.2}` (moderate: `{"ITOT": 0.6, "AGG": 0.4}`; conservative: `{"ITOT": 0.4, "AGG": 0.6}`) |
+| 4 | Rebalance | nessun parametro |
+
+> Formato `weights` come nel Tutorial 4 (JSON consigliato). `RunQuarterly` è discovery automatica da `bt.algos` (`backend/services/algo_registry.py:discover_algos`) — nessun parametro obbligatorio.
+
+### Step A4 — eseguire i 3 backtest e confrontare
+
+1. Per ciascun albero: **Save**, poi **Run** (capital `100000`, no commission, `integer_positions` off).
+2. In **Results** spuntare i 3 run e usare **Confronto equity singole (normalizzato a 100)** — equivale a `report.plot()` con titolo "Fixed Weighted Portfolio".
+3. **Metrics** di ciascun run ≈ `report.display()` / `set_riskfree_rate(0.01)` dell'articolo (la GUI mostra Sharpe/drawdown/CAGR; il risk-free non è impostabile — confrontare i valori nominali).
+
+Valori attesi (articolo, 2012-02-23 → 2020-03-06, risk-free 1%):
+
+| Metrica | aggressive (80/20) | moderate (60/40) | conservative (40/60) |
+|---------|-------------------|------------------|----------------------|
+| Total Return | ~122% | ~96% | ~73% |
+| CAGR | ~10,4% | ~8,8% | ~7,0% |
+| Max Drawdown | ~−15,8% | ~−11,5% | ~−7,3% |
+| Daily Sharpe | ~0,90 | ~0,99 | ~1,15 |
+
+> Con dati yfinance fino ad oggi i valori saranno diversi (periodo più lungo) — l'ordinamento deve restare: aggressive più return e più drawdown, conservative più Sharpe.
+
+---
+
+## Parte B — rotation momentum (replica fedele, 4 varianti)
+
+L'articolo definisce 4 strategie `m3m/m6m/m9m/m1y` che differiscono **solo** per `lookback` (3/6/9/12 mesi), con `n=4` su universo equity e `RunQuarterly + RunAfterDate('2013-3-31')`:
+
+```python
+m3m = bt.Strategy('3m', [bt.algos.RunQuarterly(), bt.algos.RunAfterDate('2013-3-31'),
+  bt.algos.SelectAll(), bt.algos.SelectMomentum(n=4, lookback=pd.DateOffset(months=3)),
+  bt.algos.WeighEqually(), bt.algos.Rebalance()])
+```
+
+### Step B2 — albero `mom3m_equity`
+
+1. Root `mom3m_equity` + N Security equity (replica: tutti i 12; test rapido: `ITOT,IVV,IJH,IJR,IUSG,IUSV` con `n=2` invece di `n=4` — `SelectMomentum` richiede `n <= N` selezionati).
+2. Algo Stack:
+
+| Ordine | Algo | Parametri |
+|--------|------|-----------|
+| 1 | RunQuarterly | nessun parametro |
+| 2 | RunAfterDate | **date**: `2013-03-31` (stringa — il BE la passa a `pd.to_datetime`, formato `YYYY-MM-DD`) |
+| 3 | SelectAll | nessun parametro |
+| 4 | SelectMomentum | **n**: `4` (o `2` su universo ridotto — deve essere ≤ N titoli); **lookback**: `months=3` (`m3m`), `months=6` (`m6m`), `months=9` (`m9m`), `years=1` (`m1y`); **lag** vuoto (= default 0 giorni) |
+| 5 | WeighEqually | nessun parametro |
+| 6 | Rebalance | nessun parametro |
+
+> **Sintassi `lookback`:** i campi GUI sono testo libero; il BE converte `months=6` / `years=1, days=0` in `pd.DateOffset` (`backend/services/algo_registry.py:_parse_dateoffset`). Il campo mostra placeholder `es. months=6` quando il default è un DateOffset. Non digitare numeri nudi (`6` → `ValueError` esplicito).
+>
+> **Le 4 varianti:** duplicare l'albero (`Save` → `Load` con nuovo nome `mom3m_equity`, `mom6m_equity`, `mom9m_equity`, `mom1y_equity`) cambiando solo `lookback`. Poi **Run** ciascuna e confronto overlay (≈ `report2.prices['2013-3-31':].plot()` "Equity Rotation Portfolio").
+
+3. **Save** + **Run** ciascuna variante e verificare in **Weights** la rotazione trimestrale tra i top-4 per total-return sul rispettivo lookback.
+
+---
+
+## Parte C — ottimizzazione (replica fedele: MeanVar / ERC / InvVol)
+
+```python
+MeanVar = bt.Strategy('MeanVar', [RunQuarterly(), RunAfterDate('2013-3-31'), SelectAll(), WeighMeanVar(lookback=1y), Rebalance()])
+ERC     = bt.Strategy('ERC',     [RunQuarterly(), RunAfterDate('2013-3-31'), SelectAll(), WeighERC(lookback=1y), Rebalance()])
+InvVol  = bt.Strategy('InvVol',  [RunQuarterly(), RunAfterDate('2013-3-31'), SelectAll(), WeighInvVol(lookback=1y), Rebalance()])
+```
+
+1. Duplicare l'albero Parte B in `mv_equity`, `erc_equity`, `iv_equity`: sostituire solo `SelectMomentum + WeighEqually` con rispettivamente `WeighMeanVar`, `WeighERC`, `WeighInvVol`, impostando **lookback**: `years=1` (come l'articolo; altri parametri vuoti = default: `covar_method` ledoit-wolf, `bounds` (0,1), `rf` 0).
+2. Stack risultante: `RunQuarterly → RunAfterDate(date=2013-03-31) → SelectAll → WeighMeanVar|WeighERC|WeighInvVol → Rebalance` (**5 algos**).
+3. **Run** tutti e tre (servono `scipy` e `cvxopt`, entrambi nelle dipendenze BE) e confrontare overlay con le 4 varianti Parte B (≈ `report3.prices.plot()` "Equity Alt-Weighted Portfolio").
+4. **Warmup:** con `lookback years=1` + `RunAfterDate(2013-03-31)` servono prezzi da ~inizio 2012 — lo Step 1 parte da `2012-01-01`, ok. Senza warmup sufficiente il run fallisce in `LedoitWolf` (finestra vuota) — in tal caso retrodatare lo **Start** del fetch.
+
+---
+
+## Parte D — pooled portfolio 80/20 con children (replica fedele)
+
+```python
+equity = bt.Strategy('equity', [RunQuarterly(), RunAfterDate('2013-3-31'), SelectAll(),
+  SelectMomentum(n=2, lookback=3m), WeighInvVol(1y), Rebalance()], children=tickers['equity'])
+bond   = bt.Strategy('bond',   [RunQuarterly(), RunAfterDate('2013-3-31'), SelectAll(),
+  SelectMomentum(n=2, lookback=3m), WeighEqually(), Rebalance()], children=tickers['bond'])
+pooled = bt.Strategy('pooled', [RunQuarterly(), SelectAll(), WeighSpecified(equity=0.8, bond=0.2), Rebalance()],
+  children=[equity, bond])
+```
+
+Pattern identico al Tutorial 7 (parent + 2 child Strategy):
+
+```
+pooled (Strategy)                      # RunQuarterly → SelectAll → WeighSpecified({"equity":0.8,"bond":0.2}) → Rebalance
+├── equity (Strategy)                  # RunQuarterly → RunAfterDate(2013-03-31) → SelectAll → SelectMomentum(n=2) → WeighInvVol → Rebalance
+│   ├── ITOT (Security)
+│   └── ... (universo equity)
+└── bond (Strategy)                    # RunQuarterly → RunAfterDate(2013-03-31) → SelectAll → SelectMomentum(n=2) → WeighEqually → Rebalance
+    ├── AGG (Security)
+    └── ... (universo bond)
+```
+
+### Note operative
+
+- `WeighSpecified` nel parent punta ai **nomi dei child**, non ai ticker — e il BE upper-casea le chiavi (`backend/services/algo_registry.py:254`) mentre `Rebalance` confronta case-sensitive (`if cname in targets`): **rinominare i child esattamente `EQUITY` / `BOND` maiuscoli**. Nel JSON pesi la case è indifferente (`{"equity": 0.8, "bond": 0.2}` va bene, viene normalizzato).
+- `SelectMomentum(n=2)`: con universo ridotto (es. 4 equity + 4 bond) `n=2` resta valido.
+- Universo minimo funzionante: 2 equity + 2 bond + `n=1`? No — `SelectMomentum(n=1)` su 2 titoli è degenere ma gira; consigliato ≥4 titoli per lato con `n=2` come l'articolo.
+- Il parent **non** ha `RunAfterDate` (come l'originale): parte da subito, i child restano fermi fino al 2013-03-31.
+- In **Results**: **Weights (%)** ≈ `get_security_weights('pooled').plot.area()`; **Metrics/Drawdown** ≈ `stats.drawdown.plot()` + tabella top-5 drawdown dell'articolo.
+
+Valori attesi pooled 80/20 (articolo, risk-free 1%): Total Return ~69%, CAGR ~6,7%, MaxDD ~−20%, Sharpe daily ~0,53.
+
+---
+
+## Suggerimenti aggiuntivi
+
+- **Confrontare tutto in overlay:** spuntare in **Results** i run `aggressive`, `moderate`, `conservative`, `mom3m_equity`, `erc_equity`, `iv_equity`, `pooled` e usare **Confronto equity singole** — replica in un colpo i 4 `report.plot()` dell'articolo.
+- **Risk-free rate:** la GUI non espone `set_riskfree_rate` — gli Sharpe mostrati sono a risk-free 0; la differenza con la tabella articolo (~1% annuo) è trascurabile su equity ma visibile su `conservative`.
+- **Lookback custom:** `SelectMomentum` accetta `lookback` come testo (`months=6`, `years=1`) e `Weigh*`/`lag` allo stesso modo — usare le 4 varianti Parte B per confrontare la sensibilità al lookback prima di toccare il pooled.
+- **Salvare:** **Save** per ciascuna variante (`aggressive`, `moderate`, `conservative`, `mom3m_equity`, `erc_equity`, `iv_equity`, `pooled`).

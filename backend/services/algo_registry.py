@@ -5,6 +5,7 @@ import re
 from typing import Any
 
 import bt.algos as algos_mod
+import pandas as pd
 from bt.core import Algo
 
 # Map prefix to category label (same 7 buckets as SPEC)
@@ -88,6 +89,30 @@ def _is_dataframe_param(algo_name: str, param_name: str) -> bool:
     return (algo_name, param_name) in DATAFRAME_PARAM_ALGOS
 
 
+_DATEOFFSET_PART_RE = re.compile(r"([A-Za-z_]+)\s*=\s*(\d+)")
+
+
+def _parse_dateoffset(s: str) -> Any:
+    """Parse GUI text like 'months=6' / 'years=1, days=0' into pd.DateOffset."""
+    parts = [p.strip() for p in s.split(",") if p.strip()]
+    kwargs: dict[str, Any] = {}
+    for p in parts:
+        m = _DATEOFFSET_PART_RE.fullmatch(p)
+        if not m:
+            raise ValueError(
+                f"Invalid DateOffset '{s}': use e.g. 'months=6' or 'years=1, days=0'"
+            )
+        kwargs[m.group(1)] = int(m.group(2))
+    if not kwargs:
+        raise ValueError(
+            f"Invalid DateOffset '{s}': use e.g. 'months=6' or 'years=1, days=0'"
+        )
+    try:
+        return pd.DateOffset(**kwargs)
+    except Exception as e:
+        raise ValueError(f"Invalid DateOffset '{s}': {e}") from e
+
+
 def discover_algos() -> dict[str, dict]:
     out: dict[str, dict] = {}
     # ponytail: include both bt.algos and custom_algos (StopLossTakeProfit etc.)
@@ -111,10 +136,12 @@ def discover_algos() -> dict[str, dict]:
             for k, v in sig.parameters.items():
                 if k == "self":
                     continue
+                # ponytail: *args/**kwargs never required — no default but also no missing-arg error
+                is_var = v.kind in (inspect.Parameter.VAR_KEYWORD, inspect.Parameter.VAR_POSITIONAL)
                 params[k] = {
                     "annotation": str(v.annotation) if v.annotation is not inspect._empty else "Any",
                     "default": v.default if v.default is not inspect._empty else None,
-                    "required": v.default is inspect._empty,
+                    "required": (v.default is inspect._empty) and not is_var,
                 }
             doc = (obj.__doc__ or "").strip()
             requires, sets = _parse_requires_sets(doc)
@@ -145,11 +172,15 @@ def _coerce_param_value(class_name: str, param_name: str, value: Any) -> Any:
     s = value.strip()
     if not s:
         return value
+    info = REGISTRY.get(class_name, {}).get("params", {}).get(param_name)
+    default = info.get("default") if info else None
+    # ponytail: DateOffset params (lookback/lag) — GUI sends text like "months=6"
+    if isinstance(default, pd.DateOffset):
+        return _parse_dateoffset(s)
     # boolean (bt alogs use bool for RunMonthly etc.)
     low = s.lower()
     if low in ("true", "false"):
         # check default type to confirm bool expected, but also coerce anyway
-        info = REGISTRY.get(class_name, {}).get("params", {}).get(param_name)
         if info and isinstance(info.get("default"), bool):
             return low == "true"
         # fallback: treat as bool for known boolean param names
@@ -158,8 +189,6 @@ def _coerce_param_value(class_name: str, param_name: str, value: Any) -> Any:
         return low == "true"
     # numeric: try int/float
     # ponytail: handle both int and float strings; default type guides choice
-    info = REGISTRY.get(class_name, {}).get("params", {}).get(param_name)
-    default = info.get("default") if info else None
     # try to parse as float first if contains '.' or default is float
     try:
         if isinstance(default, float):
@@ -192,6 +221,13 @@ def build_algo(class_name: str, params: dict | None) -> Any:
     if cls is None:
         raise ValueError(f"Unknown algo {class_name}")
     p = dict(params or {})
+    # ponytail: drop cleared/empty-string params so bt defaults apply (e.g. DateOffset lookback)
+    schema_params = REGISTRY.get(class_name, {}).get("params", {})
+    for kk in list(p.keys()):
+        if isinstance(p[kk], str) and not p[kk].strip():
+            if schema_params.get(kk, {}).get("required", False):
+                raise ValueError(f"{class_name} requires param '{kk}' (empty value)")
+            del p[kk]
     # ponytail: coerce stale string params (e.g. LimitWeights limit '0.4' -> 0.4) before instantiation
     for kk, vv in list(p.items()):
         p[kk] = _coerce_param_value(class_name, kk, vv)
