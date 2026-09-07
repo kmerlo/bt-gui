@@ -5,7 +5,7 @@ import { useBtStore } from '../store/btStore'
 import TaxProfilesPanel from './TaxProfilesPanel'
 import CommissionField from './CommissionField'
 import { validateCommission } from '../utils/commission'
-import type { CommissionParams } from '../utils/commission'
+import type { CommissionFlags, CommissionParams } from '../utils/commission'
 
 const S = {
   wrap: { padding: 12, color: '#c9d1d9' } as const,
@@ -87,7 +87,11 @@ export default function SettingsView() {
     my_commissions_max: settings.my_commissions_max,
     my_commissions_perc: settings.my_commissions_perc,
   }
-  const commError = validateCommission(settings.simple_fn, commParams)
+  const commFlags: CommissionFlags = {
+    commission_formula_enabled: settings.commission_formula_enabled,
+    commission_params_enabled: settings.commission_params_enabled,
+  }
+  const commError = validateCommission(settings.simple_fn, commParams, commFlags)
 
   const handleSave = () => {
     if (commError) {
@@ -232,8 +236,10 @@ export default function SettingsView() {
           <CommissionField
             formula={settings.simple_fn}
             params={commParams}
+            flags={commFlags}
             onFormula={(v) => setSettings({ ...settings, simple_fn: v })}
             onParams={(p) => setSettings({ ...settings, ...p })}
+            onFlags={(f) => setSettings({ ...settings, ...f })}
             error={commError}
           />
         </div>

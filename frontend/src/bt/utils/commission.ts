@@ -9,6 +9,11 @@ export type CommissionParams = {
   my_commissions_perc: number | null
 }
 
+export type CommissionFlags = {
+  commission_formula_enabled: boolean
+  commission_params_enabled: boolean
+}
+
 // ponytail: taglia artefatti float (es. 0.07/100) senza dipendenze
 function fmt(n: number): string {
   return String(Number(n.toPrecision(12)))
@@ -30,17 +35,20 @@ function paramsError(p: CommissionParams): string {
   return ''
 }
 
-/** '' = valido. Regola conflitto: o formula o parametri, mai entrambi. */
-export function validateCommission(formula: string, p: CommissionParams): string {
-  const hasFormula = formula.trim() !== ''
-  const hasParams = hasCommissionParams(p)
-  if (hasFormula && hasParams) return 'commissioni: compila o la formula o i 3 parametri, non entrambi'
-  if (hasFormula) {
+/** '' = valido. Solo il flag attivo applica i valori (precompilati ammessi); entrambi i flag = errore. */
+export function validateCommission(formula: string, p: CommissionParams, f: CommissionFlags): string {
+  if (f.commission_formula_enabled && f.commission_params_enabled)
+    return 'commissioni: attiva o la formula o i parametri, non entrambi'
+  if (f.commission_formula_enabled) {
+    if (!formula.trim()) return 'commissioni: flag formula attivo ma formula vuota'
     const ok = /^\s*lambda\s+\w+\s*,\s*\w+\s*:/.test(formula)
     if (!ok) return 'must be lambda (q,p)'
     return ''
   }
-  if (hasParams) return paramsError(p)
+  if (f.commission_params_enabled) {
+    if (!hasCommissionParams(p)) return 'commissioni: flag parametri attivo ma nessun parametro'
+    return paramsError(p)
+  }
   return ''
 }
 
@@ -56,11 +64,11 @@ export function buildCommissionFn(p: CommissionParams): string | null {
   return `lambda q,p: ${expr}`
 }
 
-/** Formula effettiva da inviare al BE: raw se presente, altrimenti generata, altrimenti ''. */
-export function resolveCommissionFn(formula: string, p: CommissionParams): string {
-  const f = formula.trim()
-  if (f) return f
-  return buildCommissionFn(p) ?? ''
+/** Formula effettiva da inviare al BE: solo il flag attivo applica, altrimenti '' (nessuna commissione). */
+export function resolveCommissionFn(formula: string, p: CommissionParams, f: CommissionFlags): string {
+  if (f.commission_formula_enabled) return formula.trim()
+  if (f.commission_params_enabled) return buildCommissionFn(p) ?? ''
+  return ''
 }
 
 /** Anteprima costo in aritmetica pura (mai eval) — null se parametri invalidi. */

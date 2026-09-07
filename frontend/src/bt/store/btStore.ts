@@ -99,10 +99,12 @@ export const useBtStore = create<BtStore>((set, get) => ({
         initial_capital: (cfg.initial_capital as number) ?? get().backtestConfig.initial_capital,
         integer_positions: (cfg.integer_positions as boolean) ?? get().backtestConfig.integer_positions,
         simple_fn: (commission.simple_fn as string) ?? get().backtestConfig.simple_fn ?? '',
-        // ponytail: il preset strategia non salva i parametri (solo-localStorage) -> tieni quelli correnti
+        // ponytail: il preset strategia non salva i parametri/flag (solo-localStorage) -> tieni quelli correnti
         my_commissions_min: get().backtestConfig.my_commissions_min ?? null,
         my_commissions_max: get().backtestConfig.my_commissions_max ?? null,
         my_commissions_perc: get().backtestConfig.my_commissions_perc ?? null,
+        commission_formula_enabled: get().backtestConfig.commission_formula_enabled,
+        commission_params_enabled: get().backtestConfig.commission_params_enabled,
         start: (cfg.start as string | null) ?? tickerStart,
         end: (cfg.end as string | null) ?? tickerEnd,
         price_column: loadSettings().price_column,

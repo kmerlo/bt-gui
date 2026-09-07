@@ -9,6 +9,8 @@ export type BuilderBacktestConfig = {
   initial_capital: number
   integer_positions: boolean
   simple_fn: string
+  commission_formula_enabled: boolean
+  commission_params_enabled: boolean
   my_commissions_min: number | null
   my_commissions_max: number | null
   my_commissions_perc: number | null
@@ -61,6 +63,8 @@ export function loadStoredPreset(): StoredPreset | null {
         initial_capital: cfg.initial_capital ?? loadSettings().initial_capital,
         integer_positions: cfg.integer_positions ?? loadSettings().integer_positions,
         simple_fn: cfg.simple_fn ?? loadSettings().simple_fn,
+        commission_formula_enabled: cfg.commission_formula_enabled ?? loadSettings().commission_formula_enabled,
+        commission_params_enabled: cfg.commission_params_enabled ?? loadSettings().commission_params_enabled,
         // ponytail: parametri commissioni solo-localStorage, backfill dai default Settings
         my_commissions_min: cfg.my_commissions_min ?? loadSettings().my_commissions_min ?? null,
         my_commissions_max: cfg.my_commissions_max ?? loadSettings().my_commissions_max ?? null,
@@ -105,6 +109,8 @@ export function defaultPreset(): StoredPreset {
       initial_capital: loadSettings().initial_capital,
       integer_positions: loadSettings().integer_positions,
       simple_fn: loadSettings().simple_fn,
+      commission_formula_enabled: loadSettings().commission_formula_enabled,
+      commission_params_enabled: loadSettings().commission_params_enabled,
       my_commissions_min: loadSettings().my_commissions_min ?? null,
       my_commissions_max: loadSettings().my_commissions_max ?? null,
       my_commissions_perc: loadSettings().my_commissions_perc ?? null,
@@ -136,8 +142,8 @@ export function buildPresetForTree(get: () => BtStore): Record<string, unknown> 
     config: {
       initial_capital: s.backtestConfig.initial_capital,
       integer_positions: s.backtestConfig.integer_positions,
-      // ponytail: salva la formula risolta (parametri -> lambda) così la strategia resta eseguibile; i 3 campi restano solo-localStorage
-      commission: { type: 'simple', simple_fn: resolveCommissionFn(s.backtestConfig.simple_fn, s.backtestConfig) || null },
+      // ponytail: salva la formula risolta via flag così la strategia resta eseguibile; valori/flag restano solo-localStorage
+      commission: { type: 'simple', simple_fn: resolveCommissionFn(s.backtestConfig.simple_fn, s.backtestConfig, s.backtestConfig) || null },
       start: s.backtestConfig.start,
       end: s.backtestConfig.end,
       benchmark_ticker: s.backtestConfig.benchmark_ticker || 'SPY',

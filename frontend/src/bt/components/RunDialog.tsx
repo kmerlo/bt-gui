@@ -7,7 +7,7 @@ import { collectTickers } from '../utils/collectTickers'
 import DateInputIT from './DateInputIT'
 import CommissionField from './CommissionField'
 import { resolveCommissionFn, validateCommission } from '../utils/commission'
-import type { CommissionParams } from '../utils/commission'
+import type { CommissionFlags, CommissionParams } from '../utils/commission'
 import TaxPanel, { validateTaxRate } from './TaxPanel'
 
 const S = {
@@ -47,6 +47,10 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
     my_commissions_min: backtestConfig.my_commissions_min,
     my_commissions_max: backtestConfig.my_commissions_max,
     my_commissions_perc: backtestConfig.my_commissions_perc,
+  }
+  const commFlags: CommissionFlags = {
+    commission_formula_enabled: backtestConfig.commission_formula_enabled,
+    commission_params_enabled: backtestConfig.commission_params_enabled,
   }
   const benchmarkTicker = backtestConfig.benchmark_ticker ?? 'SPY'
 
@@ -129,8 +133,8 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
     }
   }, [runId])
 
-  // ponytail: validazione completa al salvataggio/run (BE); qui solo forma + regola o/o
-  const fnError = validateCommission(simpleFn, commParams)
+  // ponytail: validazione completa al salvataggio/run (BE); qui solo forma + regola flag
+  const fnError = validateCommission(simpleFn, commParams, commFlags)
 
   const toggleTicker = (sym: string) => {
     setSelectedTickers((prev) => prev.includes(sym) ? prev.filter((t) => t !== sym) : [...prev, sym])
@@ -193,7 +197,7 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
     const config = {
       initial_capital: capital,
       integer_positions: integerPos,
-      commission: { type: 'simple', simple_fn: resolveCommissionFn(simpleFn, commParams) || null },
+      commission: { type: 'simple', simple_fn: resolveCommissionFn(simpleFn, commParams, commFlags) || null },
       start: tickerStart,
       end: tickerEnd,
       price_column: backtestConfig.price_column,
@@ -319,8 +323,10 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
       <CommissionField
         formula={simpleFn}
         params={commParams}
+        flags={commFlags}
         onFormula={(v) => setBacktestConfig({ simple_fn: v })}
         onParams={(p) => setBacktestConfig(p)}
+        onFlags={(f) => setBacktestConfig(f)}
         error={fnError}
       />
       <TaxPanel tickers={selectedTickers} />
