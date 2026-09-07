@@ -173,6 +173,15 @@ def run_backtest_sync(
                     f"Fetch {missing} in Ticker Catalog e premi ↻ in Run Backtest per ricaricare."
                 )
         strategy = to_bt_strategy(tree, indicators or {}, price_df)
+        # ponytail: StatInfoRatio benchmark (e.g. IVV) may live outside the tree
+        # universe — preload its series with the run's own range/column so the
+        # IR matches backtest prices; missing data raises the actionable error
+        try:
+            from backend.services.stat_algos import preload_stat_benchmarks
+
+            preload_stat_benchmarks(strategy, cfg.start, cfg.end, cfg.price_column)
+        except Exception:
+            pass  # ponytail: call-time fallback raises the actionable ValueError
         commissions = _build_commission(cfg)
         bt_obj = bt.Backtest(
             strategy,

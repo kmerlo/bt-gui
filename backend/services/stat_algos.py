@@ -79,13 +79,24 @@ class StatInfoRatio(Algo):
         self.benchmark = benchmark
         self.lookback = lookback
         self.lag = lag
+        # ponytail: preloaded benchmark prices (set by backtest_runner so the
+        # benchmark need NOT be a Security in the tree / column in universe —
+        # Tutorial 11 SPHMV uses IVV as benchmark over a sectors-only universe)
+        self._benchmark_series: pd.Series | None = None
+
+    def _benchmark_prices(self) -> pd.Series:
+        """Benchmark price series outside universe: preloaded first, else DB fallback (cached)."""
+        if self._benchmark_series is not None:
+            return self._benchmark_series
+        bm = _load_benchmark_series(self.benchmark)
+        self._benchmark_series = bm
+        return bm
 
     def __call__(self, target):
         selected = list(target.temp.get("selected", []))
         if not selected:
             target.temp["stat"] = pd.Series(dtype=float)
             return True
-        bmk_col = _resolve_columns(target.universe, [self.benchmark], "StatInfoRatio")[0]
         cols = _resolve_columns(target.universe, selected, "StatInfoRatio")
         t0 = target.now - self.lag
         window = target.universe.loc[(t0 - self.lookback) : t0]
@@ -93,6 +104,115 @@ class StatInfoRatio(Algo):
             target.temp["stat"] = pd.Series(dtype=float)
             return True
         prc = window[cols].pct_change().dropna()
-        bmk = window[bmk_col].pct_change().dropna()
+        try:
+            bmk_col = _resolve_columns(target.universe, [self.benchmark], "StatInfoRatio")[0]
+            bmk = window[bmk_col].pct_change().dropna()
+        except ValueError:
+            # ponytail: benchmark outside universe (Tutorial 11: IVV vs sectors)
+            # — use preloaded/DB series aligned on the same window instead of crashing
+            bm_series = self._benchmark_prices()
+            bmk = bm_series.loc[(t0 - self.lookback) : t0].pct_change().dropna()
+            common = prc.index.intersection(bmk.index)
+            if common.empty:
+                target.temp["stat"] = pd.Series(dtype=float)
+                return True
+            prc = prc.loc[common]
+            bmk = bmk.loc[common]
         target.temp["stat"] = pd.Series({p: prc[p].calc_information_ratio(bmk) for p in prc})
         return True
+
+
+def _load_benchmark_series(
+    benchmark: str,
+    start: str | None = None,
+    end: str | None = None,
+    price_column: str = "close",
+) -> pd.Series:
+    """Load a single-ticker benchmark price series from the active price source.
+
+    Used when the benchmark (e.g. IVV) is not a Security in the tree, so it is
+    absent from the bt universe. Raises ValueError naming the benchmark when no
+    data exists — caller surfaces it as 422 / actionable message, never silent.
+    """
+    from backend.services.price_loading import _load_prices_from_db
+
+    name = str(benchmark).strip().upper()
+    try:
+        df = _load_prices_from_db([name], start, end, price_column)
+    except ValueError as e:
+        raise ValueError(
+            f"StatInfoRatio: benchmark '{name}' has no price data for range {start}->{end} "
+            f"(price_column={price_column}). Fetch {name} in Ticker Catalog. ({e})"
+        ) from e
+    if df.empty:
+        raise ValueError(f"StatInfoRatio: benchmark '{name}' has no price data — Fetch {name} in Ticker Catalog.")
+    col = next((c for c in df.columns if str(c).upper() == name), df.columns[0])
+    s = pd.to_numeric(df[col], errors="coerce").dropna()
+    s.index = pd.to_datetime(s.index)
+    if s.empty:
+        raise ValueError(f"StatInfoRatio: benchmark '{name}' has only NaN prices.")
+    return s
+
+
+def collect_stat_benchmarks(tree) -> list[str]:
+    """Benchmark tickers referenced by StatInfoRatio algos in a StrategyTree.
+
+    Accepts a StrategyTree / NodeConfig / plain dict (model_dump). Returns
+    sorted upper-case names, empty strings skipped. Pure walk, no DB access.
+    """
+    found: set[str] = set()
+
+    def _algos_of(node) -> list:
+        if isinstance(node, dict):
+            return node.get("algos") or []
+        return getattr(node, "algos", None) or []
+
+    def _children_of(node) -> list:
+        if isinstance(node, dict):
+            return node.get("children") or []
+        return getattr(node, "children", None) or []
+
+    def _walk(node) -> None:
+        for a in _algos_of(node):
+            cls = a.get("class_name") if isinstance(a, dict) else getattr(a, "class_name", None)
+            if cls != "StatInfoRatio":
+                continue
+            params = a.get("params") if isinstance(a, dict) else (getattr(a, "params", None) or {})
+            bmk = (params or {}).get("benchmark")
+            if isinstance(bmk, str) and bmk.strip():
+                found.add(bmk.strip().upper())
+        for ch in _children_of(node):
+            _walk(ch)
+
+    if hasattr(tree, "root"):
+        root = tree.root
+    elif isinstance(tree, dict):
+        root = tree.get("root", tree)
+    else:
+        root = tree
+    _walk(root if root is not None else tree)
+    return sorted(found)
+
+
+def preload_stat_benchmarks(bt_root, start=None, end=None, price_column: str = "close") -> None:
+    """Preload benchmark series onto every StatInfoRatio in a built bt tree.
+
+    Best-effort: failures are left for call-time fallback (which raises the
+    actionable ValueError). Uses the run's own start/end/price_column so the
+    IR matches the backtest prices exactly.
+    """
+    stack = [bt_root]
+    while stack:
+        node = stack.pop()
+        algos = getattr(getattr(node, "stack", None), "algos", None) or []
+        for a in algos:
+            if type(a).__name__ == "StatInfoRatio" and getattr(a, "_benchmark_series", None) is None:
+                try:
+                    a._benchmark_series = _load_benchmark_series(a.benchmark, start, end, price_column)
+                except Exception:
+                    pass  # ponytail: call-time fallback raises the actionable error
+        children = getattr(node, "children", None) or {}
+        try:
+            stack.extend(children.values() if hasattr(children, "values") else children)
+        except Exception:
+            pass  # ponytail: bt children shape varies pre/post setup — walk best-effort

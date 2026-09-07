@@ -123,3 +123,84 @@ class TestGuiWiring:
     def test_build_algo_requires_benchmark(self):
         with pytest.raises(ValueError, match="benchmark"):
             build_algo("StatInfoRatio", {"benchmark": "", "lookback": "months=7"})
+
+
+class TestBenchmarkOutsideUniverse:
+    """Tutorial 11 SPHMV: benchmark (IVV) is NOT a Security — sectors-only universe."""
+
+    def test_preloaded_series_matches_universe_path(self):
+        univ = make_ir_universe()
+        sectors = univ[["AAA", "BBB"]]
+
+        class Stub:
+            def __init__(self, u):
+                self.temp = {"selected": ["AAA", "BBB"]}
+                self.universe = u
+                self.now = u.index[-1]
+
+        t1 = Stub(univ)
+        stat_algos.StatInfoRatio(benchmark="IVV", lookback=pd.DateOffset(months=3))(t1)
+        t2 = Stub(sectors)
+        algo = stat_algos.StatInfoRatio(benchmark="IVV", lookback=pd.DateOffset(months=3))
+        algo._benchmark_series = pd.Series(univ["IVV"].to_numpy(), index=univ.index)
+        assert algo(t2) is True
+        assert list(t2.temp["stat"].index) == list(t1.temp["stat"].index)
+        for k in t1.temp["stat"].index:
+            assert t2.temp["stat"][k] == pytest.approx(t1.temp["stat"][k])
+        assert bt.algos.SelectN(n=1, sort_descending=True)(t2) is True
+        assert t2.temp["selected"] == ["AAA"]
+
+    def test_db_fallback_loads_benchmark(self):
+        # ponytail: test_ rows in test DB only (conftest forces test DB), cleaned up after
+        from backend.database import PriceData, SessionLocal
+
+        idx = pd.date_range("2021-01-04", periods=60, freq="B")
+        db = SessionLocal()
+        try:
+            db.query(PriceData).filter(PriceData.symbol == "TEST_BMK_Q").delete(synchronize_session=False)
+            db.commit()
+            db.add_all(
+                PriceData(symbol="TEST_BMK_Q", interval="1d", date=d.to_pydatetime(), close=float(100 + i * 0.5))
+                for i, d in enumerate(idx)
+            )
+            db.commit()
+            import numpy as np
+
+            np.random.seed(7)
+            univ = pd.DataFrame(
+                {
+                    "TEST_SEC_A": 100 + np.cumsum(np.random.randn(60) * 0.5 + 0.2),
+                    "TEST_SEC_B": 200 + np.cumsum(np.random.randn(60) * 0.5 - 0.1),
+                },
+                index=idx,
+            )
+
+            class Stub:
+                def __init__(self):
+                    self.temp = {"selected": ["TEST_SEC_A", "TEST_SEC_B"]}
+                    self.universe = univ
+                    self.now = idx[-1]
+
+            t = Stub()
+            algo = stat_algos.StatInfoRatio(benchmark="TEST_BMK_Q", lookback=pd.DateOffset(months=1))
+            assert algo(t) is True
+            assert set(t.temp["stat"].index) == {"TEST_SEC_A", "TEST_SEC_B"}
+        finally:
+            db.query(PriceData).filter(PriceData.symbol == "TEST_BMK_Q").delete(synchronize_session=False)
+            db.commit()
+            db.close()
+
+    def test_collect_stat_benchmarks(self):
+        tree = {
+            "root": {
+                "algos": [
+                    {"class_name": "RunQuarterly", "params": {}},
+                    {"class_name": "StatInfoRatio", "params": {"benchmark": "ivv"}},
+                ],
+                "children": [
+                    {"algos": [{"class_name": "StatInfoRatio", "params": {"benchmark": "SPY"}}], "children": []},
+                    {"algos": [{"class_name": "SelectN", "params": {"n": 3}}], "children": []},
+                ],
+            }
+        }
+        assert stat_algos.collect_stat_benchmarks(tree) == ["IVV", "SPY"]

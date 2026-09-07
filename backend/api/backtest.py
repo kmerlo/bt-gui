@@ -117,6 +117,31 @@ def create_backtest(req: RunRequest, db: Session = Depends(get_db)):  # noqa: B0
     except Exception:
         pass  # validation is best-effort, backtest_runner will enforce again
 
+    # ponytail: StatInfoRatio benchmark (e.g. IVV in Tutorial 11 SPHMV) may live
+    # outside the tree universe — fail fast 422 if it has no price data at all,
+    # instead of a sanitized "internal error" after the run
+    try:
+        from backend.services.stat_algos import collect_stat_benchmarks
+
+        for bmk in collect_stat_benchmarks(tree):
+            cols = set(str(c).upper() for c in price_df.columns)  # type: ignore[union-attr]
+            if bmk in cols:
+                continue
+            try:
+                from backend.services.price_loading import _load_prices_from_db
+
+                _load_prices_from_db([bmk], req.config.start, req.config.end, req.config.price_column)
+            except Exception as be:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"StatInfoRatio benchmark '{bmk}' has no price data — Fetch {bmk} in Ticker Catalog "
+                    f"({be}). Il benchmark non va aggiunto come Security: basta il fetch.",
+                ) from be
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # validation is best-effort, backtest_runner will enforce again
+
     row = DBRun(strategy_id=strategy_id, config_json=cfg_dict, stats_json=None)
     db.add(row)
     db.commit()

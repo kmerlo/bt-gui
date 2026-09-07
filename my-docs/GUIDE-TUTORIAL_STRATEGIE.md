@@ -725,7 +725,7 @@ tsmom_invvol (Strategy)
 
 ### Variante B — Equal Weight (tsmom_ew, per confronto)
 
-Duplicare la strategia (Save → Load con nuovo nome) e rinominare il root in `tsmom_ew`, oppure creare un secondo albero identico cambiando solo l'algo di pesatura (vedi Step 5).
+Duplicare la strategia con il bottone `Duplica` nel Builder (crea `nome_copy`, poi rinominala in `tsmom_ew`), oppure creare un secondo albero identico cambiando solo l'algo di pesatura (vedi Step 5).
 
 ---
 
@@ -1987,6 +1987,10 @@ SPHMV (Strategy)
 | 8 | Rebalance | nessun parametro |
 
 > Verificare **`8 algos`**. `benchmark` è required: vuoto → errore esplicito; ticker ignoto → `ValueError` con colonne disponibili. A warmup insufficiente (primi 10 anni per il drawdown) la selezione è vuota → cash, senza crash.
+>
+> **Importante — `IVV` va solo fetchato, NON aggiunto all'albero:** `StatInfoRatio(benchmark=IVV)` carica i prezzi di `IVV` automaticamente dal DB (basta il Fetch dello Step 1). Non aggiungere `IVV` come Security in `SPHMV` e non selezionarlo nel pannello Run: `SelectAll` selezionerebbe anche `IVV` e lo screen value/momentum si sporca (deve classificare solo i settori). Se `IVV` non è mai stato fetchato, il Run viene rifiutato subito con `422 StatInfoRatio benchmark 'IVV' has no price data — Fetch IVV in Ticker Catalog`.
+>
+> **Troubleshooting — box Metrics con `error: internal error` dopo il Run:** era il sintomo di `IVV` mancante dall'universo (il BE sanitizzava il `ValueError` in `internal error` generico) — fixato in `backend/services/stat_algos.py` (fallback benchmark fuori universo + preload con stesso `price_column` del run) e `backend/api/backtest.py` (fail-fast `422` se il benchmark non ha proprio dati). **Soluzione:** riavvia il backend per caricare il fix e rilancia — senza toccare l'albero.
 >
 > **Variante proxy a 1 stadio** (solo algo nativi, senza `Stat*`): sostituire le righe 3–6 con un unico `SelectMomentum` (**n**: `3`, **lookback**: `months=6`). Classifica su total-return invece che su information-ratio: sovrappesa i settori ad alta vol a parità di return. Utile per confronto rapido fedele-vs-proxy in overlay.
 
