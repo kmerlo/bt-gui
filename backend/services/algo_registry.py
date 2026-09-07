@@ -178,6 +178,20 @@ def _coerce_param_value(class_name: str, param_name: str, value: Any) -> Any:
     # ponytail: DateOffset params (lookback/lag) — GUI sends text like "months=6"
     if isinstance(default, pd.DateOffset):
         return _parse_dateoffset(s)
+    # ponytail: list params (e.g. RegimeRotation.sectors) — GUI sends JSON string like '["XLY","XLE"]'
+    # default may be None but annotation indicates list[str] | None
+    is_list_param = isinstance(default, list) or (
+        info and isinstance(info.get("annotation"), str) and "list[" in info["annotation"].lower()
+    )
+    if is_list_param:
+        try:
+            import json
+
+            parsed = json.loads(s)
+            if isinstance(parsed, list):
+                return parsed
+        except Exception:
+            pass
     # boolean (bt alogs use bool for RunMonthly etc.)
     low = s.lower()
     if low in ("true", "false"):

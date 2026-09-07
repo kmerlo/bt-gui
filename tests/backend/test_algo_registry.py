@@ -82,3 +82,18 @@ def test_empty_required_param_raises():
 
 def test_var_keyword_not_required():
     assert REGISTRY["WeighSpecified"]["params"]["weights"]["required"] is False
+
+
+def test_list_param_json_parsed():
+    # ponytail: RegimeRotation.sectors is list[str]|None with default None —
+    # GUI sends JSON string '["XLY","XLE"]' which must be parsed, not iterated as chars
+    import importlib
+
+    import backend.services.algo_registry as m
+
+    importlib.reload(m)
+    algo = m.build_algo("RegimeRotation", {"sectors": '["XLY","XLP","XLE"]'})
+    assert algo.sectors == ["XLY", "XLP", "XLE"]
+    # non-JSON string falls through unchanged → algo constructor iterates chars (legacy behavior)
+    algo2 = m.build_algo("RegimeRotation", {"sectors": "not-json"})
+    assert algo2.sectors == list("NOT-JSON")

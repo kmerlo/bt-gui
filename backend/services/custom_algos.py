@@ -7,6 +7,9 @@ from bt.core import Algo
 # re-exported here so algo_registry discovery (bt.algos + custom_algos) picks them up.
 from backend.services.stat_algos import StatDrawdown, StatInfoRatio  # noqa: F401
 
+# ponytail: regime rotation — SPY SMA200 toggle + best-sector momentum (plan 038)
+from backend.services.regime_rotation import RegimeRotation  # noqa: F401
+
 
 class StopLossTakeProfit(Algo):
     """

@@ -46,6 +46,8 @@ select = ["E", "F"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "F403"]
+"**/*.ts" = ["E", "F"]
+"**/*.tsx" = ["E", "F"]
 
 [tool.uv.sources]
 bt = { path = "../bt", editable = true }

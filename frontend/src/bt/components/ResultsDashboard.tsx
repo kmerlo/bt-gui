@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react'
+import type { IChartApi } from 'lightweight-charts'
 import { useRunsTable } from '../../hooks/useRunsTable'
 import { useRunDetail } from '../../hooks/useRunDetail'
 import { useEquityCharts } from '../../hooks/useEquityCharts'
@@ -24,9 +26,51 @@ const S = {
 export default function ResultsDashboard({ runId }: { runId: number | null }) {
   const t = useRunsTable()
   const d = useRunDetail(runId)
-  const charts = useEquityCharts(d.prices, d.benchmark)
-  const wCharts = useWeightsChart(d.weights)
+  // ponytail: shared refs for cross-chart sync — ResultsDashboard subscribes once
+  const eqTSRef = useRef<ReturnType<IChartApi['timeScale']> | null>(null)
+  const ddTSRef = useRef<ReturnType<IChartApi['timeScale']> | null>(null)
+  const wTSRef = useRef<ReturnType<IChartApi['timeScale']> | null>(null)
+  const wCharts = useWeightsChart(d.weights, wTSRef)
+  const charts = useEquityCharts(d.prices, d.benchmark, d.weights, eqTSRef, ddTSRef)
   const cmp = useCompareCharts()
+
+  // ponytail: sync all three charts bidirectionally
+  useEffect(() => {
+    const eqTS = eqTSRef.current
+    const ddTS = ddTSRef.current
+    const wTS = wTSRef.current
+    if (!eqTS || !wTS || !ddTS) return
+    let syncing = false
+    const onEq = (range: { from: number; to: number } | null) => {
+      if (syncing || !range) return
+      syncing = true
+      try { ddTS.setVisibleLogicalRange(range) } catch { /* ignore */ }
+      try { wTS.setVisibleLogicalRange(range) } catch { /* ignore */ }
+      syncing = false
+    }
+    const onDd = (range: { from: number; to: number } | null) => {
+      if (syncing || !range) return
+      syncing = true
+      try { eqTS.setVisibleLogicalRange(range) } catch { /* ignore */ }
+      try { wTS.setVisibleLogicalRange(range) } catch { /* ignore */ }
+      syncing = false
+    }
+    const onW = (range: { from: number; to: number } | null) => {
+      if (syncing || !range) return
+      syncing = true
+      try { eqTS.setVisibleLogicalRange(range) } catch { /* ignore */ }
+      try { ddTS.setVisibleLogicalRange(range) } catch { /* ignore */ }
+      syncing = false
+    }
+    eqTS.subscribeVisibleLogicalRangeChange(onEq)
+    ddTS.subscribeVisibleLogicalRangeChange(onDd)
+    wTS.subscribeVisibleLogicalRangeChange(onW)
+    return () => {
+      try { eqTS.unsubscribeVisibleLogicalRangeChange(onEq) } catch { /* ignore */ }
+      try { ddTS.unsubscribeVisibleLogicalRangeChange(onDd) } catch { /* ignore */ }
+      try { wTS.unsubscribeVisibleLogicalRangeChange(onW) } catch { /* ignore */ }
+    }
+  }, [eqTSRef.current, wTSRef.current, ddTSRef.current])
 
   const handleDeleteOne = async (id: number) => {
     const ok = await t.handleDeleteOne(id)
@@ -68,7 +112,19 @@ export default function ResultsDashboard({ runId }: { runId: number | null }) {
           <div style={S.card}>
             <div style={{ fontWeight: 700, marginBottom: 8 }}>
               Equity Curve {d.sel ? `#${d.sel}` : ''}
-              {d.benchmarkTicker && <span style={{ fontWeight: 400, fontSize: 12, color: '#8b949e' }}> · <span style={{ color: '#58a6ff' }}>● strategia</span> · <span style={{ color: '#d29922' }}>● {d.benchmarkTicker} buy&amp;hold</span></span>}
+              {d.weights && Object.keys(d.weights.series).length > 0
+                ? (
+                    <span style={{ fontWeight: 400, fontSize: 12, color: '#8b949e', marginLeft: 8 }}>
+                      <span style={{ color: '#58a6ff' }}>● SPY</span>
+                      {' · '}
+                      <span style={{ color: '#ffffff' }}>● settore</span>
+                    </span>
+                  )
+                : d.benchmarkTicker
+                  ? (
+                      <span style={{ fontWeight: 400, fontSize: 12, color: '#8b949e' }}> · <span style={{ color: '#58a6ff' }}>● strategia</span> · <span style={{ color: '#d29922' }}>● {d.benchmarkTicker} buy&amp;hold</span></span>
+                    )
+                  : null}
             </div>
             <div ref={charts.chartRef} style={{ width: '100%', height: 260 }} />
           </div>

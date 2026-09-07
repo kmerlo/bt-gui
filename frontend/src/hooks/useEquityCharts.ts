@@ -31,46 +31,159 @@ function buildDrawdown(values: number[], dates: string[]) {
   return out
 }
 
-export function useEquityCharts(prices: { dates: string[]; values: number[] } | null, benchmark?: BenchmarkEquity | null) {
+function extractTicker(key: string): string {
+  if (!key.includes('>')) return ''
+  const parts = key.split('>')
+  return parts[parts.length - 1].trim()
+}
+
+function segmentByHolding(
+  dates: string[],
+  values: number[],
+  weights: { dates: string[]; series: Record<string, number[]> },
+): { time: number; value: number; ticker: string }[] {
+  const out: { time: number; value: number; ticker: string }[] = []
+  const { dates: wDates, series } = weights
+  const dominant: Map<number, string> = new Map()
+  const wLen = wDates.length
+  for (let i = 0; i < wLen; i++) {
+    let bestTicker = ''
+    let bestWeight = 0
+    for (const [key, wArr] of Object.entries(series)) {
+      if (!key.includes('>')) continue
+      const w = wArr[i]
+      if (w != null && w > bestWeight) {
+        bestWeight = w
+        bestTicker = extractTicker(key)
+      }
+    }
+    if (bestTicker) dominant.set(i, bestTicker)
+  }
+  for (let i = 0; i < dates.length; i++) {
+    const t = toTime(dates[i] ?? '')
+    if (!t || !values[i]) continue
+    const ticker = dominant.get(i) ?? ''
+    out.push({ time: t, value: values[i]!, ticker })
+  }
+  return out
+}
+
+function splitSegments(data: { time: number; value: number; ticker: string }[]) {
+  const segments: { ticker: string; points: { time: number; value: number }[] }[] = []
+  let cur: typeof segments[0] | null = null
+  for (const d of data) {
+    if (!cur || cur.ticker !== d.ticker) {
+      cur = { ticker: d.ticker, points: [] }
+      segments.push(cur)
+    }
+    cur.points.push({ time: d.time, value: d.value })
+  }
+  return segments
+}
+
+const COLORS = {
+  spy: '#58a6ff',
+  sector: '#ffffff',
+}
+
+export function useEquityCharts(
+  prices: { dates: string[]; values: number[] } | null,
+  benchmark?: BenchmarkEquity | null,
+  weights?: { dates: string[]; series: Record<string, number[]> } | null,
+  /** Optional ref to store eq timeScale for cross-chart sync. */
+  eqTimeScaleRef?: { current: ReturnType<IChartApi['timeScale']> | null },
+  /** Optional ref to store dd timeScale for cross-chart sync. */
+  ddTimeScaleRef?: { current: ReturnType<IChartApi['timeScale']> | null },
+) {
   const chartRef = useRef<HTMLDivElement | null>(null)
   const ddRef = useRef<HTMLDivElement | null>(null)
+  const eqChartRef = useRef<IChartApi | null>(null)
+  const ddChartRef = useRef<IChartApi | null>(null)
 
   useEffect(() => {
     if (!chartRef.current || !ddRef.current || !prices || prices.dates.length === 0) return
     const eqEl = chartRef.current
     const ddEl = ddRef.current
-    const eqChart: IChartApi = createChart(eqEl, { layout: { background: { color: '#0d1117' }, textColor: '#c9d1d9' }, width: eqEl.clientWidth, height: 260, grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } } })
-    const ddChart: IChartApi = createChart(ddEl, { layout: { background: { color: '#0d1117' }, textColor: '#c9d1d9' }, width: ddEl.clientWidth, height: 160, grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } } })
-    const eqSeries: ISeriesApi<'Line'> = eqChart.addSeries(LineSeries, { color: '#58a6ff', lineWidth: 2, title: 'strategy' })
-    const ddSeries: ISeriesApi<'Area'> = ddChart.addSeries(AreaSeries, { lineColor: '#f85149', topColor: 'rgba(248,81,73,0.4)', bottomColor: 'rgba(248,81,73,0.0)' })
+    const eqChart: IChartApi = createChart(eqEl, {
+      layout: { background: { color: '#0d1117' }, textColor: '#c9d1d9' },
+      width: eqEl.clientWidth,
+      height: 260,
+      grid: { vertLines: { color: '#21262d' }, horzLines: { visible: false } },
+      crosshair: { mode: 2, vertLine: { visible: false }, horzLine: { visible: false } },
+    })
+    const ddChart: IChartApi = createChart(ddEl, {
+      layout: { background: { color: '#0d1117' }, textColor: '#c9d1d9' },
+      width: ddEl.clientWidth,
+      height: 160,
+      grid: { vertLines: { color: '#21262d' }, horzLines: { visible: false } },
+      crosshair: { mode: 2, vertLine: { visible: false }, horzLine: { visible: false } },
+    })
+    eqChartRef.current = eqChart
+    ddChartRef.current = ddChart
+    // expose timeScales for cross-chart sync
+    if (eqTimeScaleRef) eqTimeScaleRef.current = eqChart.timeScale()
+    if (ddTimeScaleRef) ddTimeScaleRef.current = ddChart.timeScale()
+
     const eqData = sanitizeLine(prices.dates, prices.values)
+    let segSeries: ISeriesApi<'Line'>[] = []
+    if (weights && Object.keys(weights.series).length > 0) {
+      const segmented = segmentByHolding(prices.dates, prices.values, weights)
+      for (const seg of splitSegments(segmented)) {
+        const color = seg.ticker === 'SPY' ? COLORS.spy : COLORS.sector
+        const s = eqChart.addSeries(LineSeries, { color, lineWidth: 2, title: seg.ticker, priceLineVisible: false })
+        s.setData(seg.points as never)
+        segSeries.push(s)
+      }
+    } else {
+      const s = eqChart.addSeries(LineSeries, { color: COLORS.spy, lineWidth: 2, title: 'strategy', priceLineVisible: false })
+      s.setData(eqData as never)
+      segSeries = [s]
+    }
+
+    const ddSeries: ISeriesApi<'Area'> = ddChart.addSeries(AreaSeries, {
+      lineColor: '#f85149',
+      topColor: 'rgba(248,81,73,0.4)',
+      bottomColor: 'rgba(248,81,73,0.0)',
+    })
     const ddData = buildDrawdown(prices.values, prices.dates)
-    eqSeries.setData(eqData as never)
     ddSeries.setData(ddData as never)
-    // ponytail: benchmark buy&hold come seconda linea, stessa scala
+
     if (benchmark && benchmark.values.length > 0) {
-      const bSeries = eqChart.addSeries(LineSeries, { color: '#d29922', lineWidth: 2, lineStyle: LineStyle.Dashed, title: benchmark.ticker })
+      const bSeries = eqChart.addSeries(LineSeries, {
+        color: '#d29922',
+        lineWidth: 2,
+        lineStyle: LineStyle.Dashed,
+        title: benchmark.ticker,
+        priceLineVisible: false,
+      })
       bSeries.setData(sanitizeLine(benchmark.dates, benchmark.values) as never)
     }
+
     eqChart.timeScale().fitContent()
     ddChart.timeScale().fitContent()
+
     const eqMap = new Map<number, number>(eqData.map((d) => [d.time, d.value]))
     const ddMap = new Map<number, number>(ddData.map((d) => [d.time, d.value]))
+
     let syncing = false
+    const eqTS = eqChart.timeScale()
+    const ddTS = ddChart.timeScale()
+
     const onEqLogical = (range: { from: number; to: number } | null) => {
       if (syncing || !range) return
       syncing = true
-      try { ddChart.timeScale().setVisibleLogicalRange(range) } catch { /* ignore */ }
+      try { ddTS.setVisibleLogicalRange(range) } catch { /* ignore */ }
       syncing = false
     }
     const onDdLogical = (range: { from: number; to: number } | null) => {
       if (syncing || !range) return
       syncing = true
-      try { eqChart.timeScale().setVisibleLogicalRange(range) } catch { /* ignore */ }
+      try { eqTS.setVisibleLogicalRange(range) } catch { /* ignore */ }
       syncing = false
     }
-    eqChart.timeScale().subscribeVisibleLogicalRangeChange(onEqLogical)
-    ddChart.timeScale().subscribeVisibleLogicalRangeChange(onDdLogical)
+    eqTS.subscribeVisibleLogicalRangeChange(onEqLogical)
+    ddTS.subscribeVisibleLogicalRangeChange(onDdLogical)
+
     const onEqCrosshair = (param: MouseEventParams<Time>) => {
       if (syncing) return
       if (!param.time || !param.point) { ddChart.clearCrosshairPosition(); return }
@@ -88,26 +201,33 @@ export function useEquityCharts(prices: { dates: string[]; values: number[] } | 
       const price = eqMap.get(t)
       if (price == null) { eqChart.clearCrosshairPosition(); return }
       syncing = true
-      try { eqChart.setCrosshairPosition(price, param.time, eqSeries) } catch { /* ignore */ }
+      try { eqChart.setCrosshairPosition(price, param.time, segSeries[segSeries.length - 1]!) } catch { /* ignore */ }
       syncing = false
     }
     eqChart.subscribeCrosshairMove(onEqCrosshair)
     ddChart.subscribeCrosshairMove(onDdCrosshair)
+
     const roEq = new ResizeObserver(() => eqChart.applyOptions({ width: eqEl.clientWidth }))
     const roDd = new ResizeObserver(() => ddChart.applyOptions({ width: ddEl.clientWidth }))
     roEq.observe(eqEl)
     roDd.observe(ddEl)
+
     return () => {
-      try { eqChart.timeScale().unsubscribeVisibleLogicalRangeChange(onEqLogical) } catch { /* ignore */ }
-      try { ddChart.timeScale().unsubscribeVisibleLogicalRangeChange(onDdLogical) } catch { /* ignore */ }
+      try { eqTS.unsubscribeVisibleLogicalRangeChange(onEqLogical) } catch { /* ignore */ }
+      try { ddTS.unsubscribeVisibleLogicalRangeChange(onDdLogical) } catch { /* ignore */ }
       try { eqChart.unsubscribeCrosshairMove(onEqCrosshair) } catch { /* ignore */ }
       try { ddChart.unsubscribeCrosshairMove(onDdCrosshair) } catch { /* ignore */ }
       roEq.disconnect()
       roDd.disconnect()
-      eqChart.remove()
-      ddChart.remove()
+      for (const s of segSeries) try { eqChart.removeSeries(s) } catch { /* ignore */ }
+      try { eqChart.remove() } catch { /* ignore */ }
+      try { ddChart.remove() } catch { /* ignore */ }
+      eqChartRef.current = null
+      ddChartRef.current = null
+      if (eqTimeScaleRef) eqTimeScaleRef.current = null
+      if (ddTimeScaleRef) ddTimeScaleRef.current = null
     }
-  }, [prices, benchmark])
+  }, [prices, benchmark, weights, eqTimeScaleRef, ddTimeScaleRef])
 
   return { chartRef, ddRef }
 }

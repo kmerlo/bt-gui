@@ -9,7 +9,11 @@ function toTime(s: string): number {
   return Number.isNaN(t) ? 0 : Math.floor(t / 1000)
 }
 
-export function useWeightsChart(weights: { dates: string[]; series: Record<string, number[]> } | null) {
+export function useWeightsChart(
+  weights: { dates: string[]; series: Record<string, number[]> } | null,
+  /** Ref updated with this chart's timeScale for cross-chart sync. */
+  timeScaleRef: { current: ReturnType<IChartApi['timeScale']> | null },
+) {
   const ref = useRef<HTMLDivElement | null>(null)
   const seriesMapRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map())
   const [hidden, setHidden] = useState<Set<string>>(new Set())
@@ -43,8 +47,9 @@ export function useWeightsChart(weights: { dates: string[]; series: Record<strin
       layout: { background: { color: '#0d1117' }, textColor: '#c9d1d9' },
       width: el.clientWidth,
       height: 200,
-      grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
+      grid: { vertLines: { color: '#21262d' }, horzLines: { visible: false } },
       rightPriceScale: { scaleMargins: { top: 0.05, bottom: 0.05 } },
+      crosshair: { mode: 2, vertLine: { visible: false }, horzLine: { visible: false } },
     })
     const map = new Map<string, ISeriesApi<'Line'>>()
     ks.forEach((k, i) => {
@@ -63,6 +68,8 @@ export function useWeightsChart(weights: { dates: string[]; series: Record<strin
       map.set(k, s)
     })
     seriesMapRef.current = map
+    // ponytail: expose timeScale via ref for cross-chart sync
+    timeScaleRef.current = chart.timeScale()
     chart.timeScale().fitContent()
     const ro = new ResizeObserver(() => chart.applyOptions({ width: el.clientWidth }))
     ro.observe(el)
@@ -71,7 +78,7 @@ export function useWeightsChart(weights: { dates: string[]; series: Record<strin
       chart.remove()
       seriesMapRef.current = new Map()
     }
-  }, [weights])
+  }, [weights, timeScaleRef])
 
   // apply visibility when hidden changes
   useEffect(() => {
