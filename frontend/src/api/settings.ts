@@ -3,6 +3,9 @@ export type BtSettings = {
   initial_capital: number
   integer_positions: boolean
   simple_fn: string
+  my_commissions_min: number | null
+  my_commissions_max: number | null
+  my_commissions_perc: number | null
   price_column: 'close' | 'adj_close'
   theme: 'dark'
   lang: 'it' | 'en'
@@ -15,6 +18,9 @@ export const defaultSettings: BtSettings = {
   initial_capital: 100000,
   integer_positions: false,
   simple_fn: '',
+  my_commissions_min: null,
+  my_commissions_max: null,
+  my_commissions_perc: null,
   price_column: 'adj_close',
   theme: 'dark',
   lang: 'it',

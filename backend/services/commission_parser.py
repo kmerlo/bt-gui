@@ -10,6 +10,9 @@ _ALLOWED_BINOPS = (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow, ast.Mod)
 _ALLOWED_UNARYOPS = (ast.UAdd, ast.USub)
 _ALLOWED_CALLS = {"max", "min", "abs", "round"}
 
+# ponytail: la whitelist AST permette queste 4 call ma l'eval girava con builtins vuoti -> NameError a runtime; esponi solo loro, niente altro
+_SAFE_FUNCS = {"max": max, "min": min, "abs": abs, "round": round}
+
 
 def _validate_body(node: ast.AST, allowed_names: set[str]) -> None:
     if isinstance(node, ast.BinOp):
@@ -83,7 +86,9 @@ def validate_commission_src(src: str) -> str:
 def parse_commission_fn(src: str) -> Callable[[float, float], float]:
     validate_commission_src(src)
     code = compile(ast.parse(src, mode="eval"), "<commission>", "eval")
-    fn = eval(code, {"__builtins__": {}})  # noqa: S307
+    glb: dict = {"__builtins__": {}}
+    glb.update(_SAFE_FUNCS)
+    fn = eval(code, glb)  # noqa: S307
     if not callable(fn):
         raise ValueError("commission: not callable")
     return fn  # type: ignore[return-value]

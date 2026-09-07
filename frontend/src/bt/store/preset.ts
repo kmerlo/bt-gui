@@ -1,5 +1,6 @@
 import type { StrategyTree } from '../../types/bt'
 import { loadSettings } from '../../api/settings'
+import { resolveCommissionFn } from '../utils/commission'
 import type { BtStore } from './btStore'
 
 export const BUILDER_PRESET_KEY = 'bt-builder-preset:v1'
@@ -8,6 +9,9 @@ export type BuilderBacktestConfig = {
   initial_capital: number
   integer_positions: boolean
   simple_fn: string
+  my_commissions_min: number | null
+  my_commissions_max: number | null
+  my_commissions_perc: number | null
   start: string | null
   end: string | null
   price_column: 'close' | 'adj_close'
@@ -57,6 +61,10 @@ export function loadStoredPreset(): StoredPreset | null {
         initial_capital: cfg.initial_capital ?? loadSettings().initial_capital,
         integer_positions: cfg.integer_positions ?? loadSettings().integer_positions,
         simple_fn: cfg.simple_fn ?? loadSettings().simple_fn,
+        // ponytail: parametri commissioni solo-localStorage, backfill dai default Settings
+        my_commissions_min: cfg.my_commissions_min ?? loadSettings().my_commissions_min ?? null,
+        my_commissions_max: cfg.my_commissions_max ?? loadSettings().my_commissions_max ?? null,
+        my_commissions_perc: cfg.my_commissions_perc ?? loadSettings().my_commissions_perc ?? null,
         start: cfg.start ?? getOneYearAgo(),
         end: cfg.end ?? getToday(),
         price_column: cfg.price_column ?? loadSettings().price_column,
@@ -97,6 +105,9 @@ export function defaultPreset(): StoredPreset {
       initial_capital: loadSettings().initial_capital,
       integer_positions: loadSettings().integer_positions,
       simple_fn: loadSettings().simple_fn,
+      my_commissions_min: loadSettings().my_commissions_min ?? null,
+      my_commissions_max: loadSettings().my_commissions_max ?? null,
+      my_commissions_perc: loadSettings().my_commissions_perc ?? null,
       start: getOneYearAgo(),
       end: getToday(),
       price_column: loadSettings().price_column,
@@ -125,7 +136,8 @@ export function buildPresetForTree(get: () => BtStore): Record<string, unknown> 
     config: {
       initial_capital: s.backtestConfig.initial_capital,
       integer_positions: s.backtestConfig.integer_positions,
-      commission: { type: 'simple', simple_fn: s.backtestConfig.simple_fn || null },
+      // ponytail: salva la formula risolta (parametri -> lambda) così la strategia resta eseguibile; i 3 campi restano solo-localStorage
+      commission: { type: 'simple', simple_fn: resolveCommissionFn(s.backtestConfig.simple_fn, s.backtestConfig) || null },
       start: s.backtestConfig.start,
       end: s.backtestConfig.end,
       benchmark_ticker: s.backtestConfig.benchmark_ticker || 'SPY',

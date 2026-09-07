@@ -30,3 +30,16 @@ def test_rejects_wrong_arity():
 def test_rejects_call():
     with pytest.raises(ValueError):
         validate_commission_src("lambda q,p: sum([q,p])")
+
+
+def test_clamped_formula_runs():
+    # formula generata dalla modalità parametrica FE: max(MIN, min(MAX, p*abs(q)*perc))
+    fn = parse_commission_fn("lambda q,p: max(1, min(100, p*abs(q)*0.001))")
+    assert fn(1000, 100) == pytest.approx(100.0)  # cap
+    assert fn(10, 1) == pytest.approx(1.0)  # floor
+    assert fn(100, 50) == pytest.approx(5.0)  # raw
+
+
+def test_floor_only_and_cap_only_run():
+    assert parse_commission_fn("lambda q,p: max(5, p*abs(q)*0.002)")(10, 10) == pytest.approx(5.0)
+    assert parse_commission_fn("lambda q,p: min(50, p*abs(q)*0.0005)")(1000, 100) == pytest.approx(50.0)

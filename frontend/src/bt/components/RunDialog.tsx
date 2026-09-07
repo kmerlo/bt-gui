@@ -5,6 +5,9 @@ import { useBtStore } from '../store/btStore'
 import { collectReferencedIds } from '../utils/collectIds'
 import { collectTickers } from '../utils/collectTickers'
 import DateInputIT from './DateInputIT'
+import CommissionField from './CommissionField'
+import { resolveCommissionFn, validateCommission } from '../utils/commission'
+import type { CommissionParams } from '../utils/commission'
 import TaxPanel, { validateTaxRate } from './TaxPanel'
 
 const S = {
@@ -40,6 +43,11 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
   const capital = backtestConfig.initial_capital
   const integerPos = backtestConfig.integer_positions
   const simpleFn = backtestConfig.simple_fn
+  const commParams: CommissionParams = {
+    my_commissions_min: backtestConfig.my_commissions_min,
+    my_commissions_max: backtestConfig.my_commissions_max,
+    my_commissions_perc: backtestConfig.my_commissions_perc,
+  }
   const benchmarkTicker = backtestConfig.benchmark_ticker ?? 'SPY'
 
   const refreshTickers = useCallback(async () => {
@@ -121,14 +129,8 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
     }
   }, [runId])
 
-  const validateFn = (v: string) => {
-    if (!v.trim()) return ''
-    const ok = /^\s*lambda\s+\w+\s*,\s*\w+\s*:/.test(v)
-    if (!ok) return 'must be lambda (q,p)'
-    // validazione completa al salvataggio (BE)
-    return ''
-  }
-  const fnError = validateFn(simpleFn)
+  // ponytail: validazione completa al salvataggio/run (BE); qui solo forma + regola o/o
+  const fnError = validateCommission(simpleFn, commParams)
 
   const toggleTicker = (sym: string) => {
     setSelectedTickers((prev) => prev.includes(sym) ? prev.filter((t) => t !== sym) : [...prev, sym])
@@ -191,7 +193,7 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
     const config = {
       initial_capital: capital,
       integer_positions: integerPos,
-      commission: { type: 'simple', simple_fn: simpleFn || null },
+      commission: { type: 'simple', simple_fn: resolveCommissionFn(simpleFn, commParams) || null },
       start: tickerStart,
       end: tickerEnd,
       price_column: backtestConfig.price_column,
@@ -313,14 +315,14 @@ export default function RunDialog({ onRunCreated }: { onRunCreated?: (id: number
         <input type="checkbox" checked={integerPos} onChange={(e) => setBacktestConfig({ integer_positions: e.target.checked })} />
         integer positions
       </label>
-      <label style={{ ...S.label, marginTop: 8 }}>Commission simple_fn (lambda q,p: ...)</label>
-      <textarea
-        style={{ ...S.input, minHeight: 60, fontFamily: 'monospace', fontSize: 12 }}
-        value={simpleFn}
-        onChange={(e) => setBacktestConfig({ simple_fn: e.target.value })}
-        placeholder="lambda q,p: max(1, abs(q)*0.01)"
+      <label style={{ ...S.label, marginTop: 8 }}>Commissioni</label>
+      <CommissionField
+        formula={simpleFn}
+        params={commParams}
+        onFormula={(v) => setBacktestConfig({ simple_fn: v })}
+        onParams={(p) => setBacktestConfig(p)}
+        error={fnError}
       />
-      {fnError && <div style={{ color: '#f85149', fontSize: 12, marginTop: 4 }}>{fnError}</div>}
       <TaxPanel tickers={selectedTickers} />
       <button type="button" style={running ? S.btnDis : S.btn} onClick={handleRun} disabled={running}>
         {running ? 'Running…' : 'Run'}

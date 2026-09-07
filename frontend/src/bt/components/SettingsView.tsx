@@ -3,6 +3,9 @@ import { btApi, strategiesApi, backtestApi, dbApi, loadSettings, saveSettings, d
 import { priceSourceApi } from '../../api/settings'
 import { useBtStore } from '../store/btStore'
 import TaxProfilesPanel from './TaxProfilesPanel'
+import CommissionField from './CommissionField'
+import { validateCommission } from '../utils/commission'
+import type { CommissionParams } from '../utils/commission'
 
 const S = {
   wrap: { padding: 12, color: '#c9d1d9' } as const,
@@ -79,15 +82,19 @@ export default function SettingsView() {
     } catch (e) { setDbMsg(String(e)) }
   }
 
+  const commParams: CommissionParams = {
+    my_commissions_min: settings.my_commissions_min,
+    my_commissions_max: settings.my_commissions_max,
+    my_commissions_perc: settings.my_commissions_perc,
+  }
+  const commError = validateCommission(settings.simple_fn, commParams)
+
   const handleSave = () => {
-    if (settings.simple_fn.trim()) {
-      const ok = /^\s*lambda\s+\w+\s*,\s*\w+\s*:/.test(settings.simple_fn)
-      if (!ok) {
-        setSaveMsg('simple_fn deve essere lambda (q,p) — es: lambda q,p: q*p*0.001')
-        return
-      }
-      // validazione completa al salvataggio (BE)
+    if (commError) {
+      setSaveMsg(commError)
+      return
     }
+    // validazione completa al salvataggio (BE)
     saveSettings(settings)
     useBtStore.getState().setBacktestConfig({ price_column: settings.price_column })
     setSaveMsg('salvato')
@@ -221,9 +228,14 @@ export default function SettingsView() {
           <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}><input type="checkbox" checked={settings.integer_positions} onChange={(e) => setSettings({ ...settings, integer_positions: e.target.checked })} /> abilita</label>
         </div>
         <div style={{ marginBottom: 8 }}>
-          <div style={S.label}>Commission simple_fn</div>
-          <textarea style={S.textarea} rows={2} placeholder="lambda q,p: max(1, abs(q)*0.01)" value={settings.simple_fn} onChange={(e) => setSettings({ ...settings, simple_fn: e.target.value })} />
-          <div style={{ fontSize: 11, color: '#8b949e' }}>lascia vuoto per nessuna commissione. Deve accettare (q,p).</div>
+          <div style={S.label}>Commissioni (default)</div>
+          <CommissionField
+            formula={settings.simple_fn}
+            params={commParams}
+            onFormula={(v) => setSettings({ ...settings, simple_fn: v })}
+            onParams={(p) => setSettings({ ...settings, ...p })}
+            error={commError}
+          />
         </div>
         <div style={S.row}>
           <button type="button" style={S.btnPri} onClick={handleSave}>Salva defaults</button>
