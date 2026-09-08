@@ -108,9 +108,11 @@ class RegimeRotation(Algo):
 
         # Compute momentum only for columns that have enough non-NaN tail values
         candidates = []
+        missing = []
         for t in self.sectors:
             col = t.upper()
             if col not in window.columns:
+                missing.append(col)
                 continue
             s = pd.to_numeric(window[col], errors="coerce")
             if s.notna().sum() < 20:
@@ -126,6 +128,12 @@ class RegimeRotation(Algo):
                 continue
             candidates.append((t.upper(), float(ret)))
 
+        if missing:
+            target.temp.setdefault("_warnings", []).extend(
+                [f"RegimeRotation: {t} not in universe (add as Security child to tree)"]
+                for t in missing
+            )
+
         if not candidates:
             # No viable sector → fallback to SPY
             target.temp["selected"] = [spy_col]
@@ -134,3 +142,43 @@ class RegimeRotation(Algo):
         best = max(candidates, key=lambda x: x[1])
         target.temp["selected"] = [best[0]]
         return True
+
+    @staticmethod
+    def validate_params(params: dict, available_tickers: list[str]) -> list[str]:
+        """Return list of warning strings for invalid sectors parameter.
+
+        Args:
+            params: Raw algo params dict (may contain string JSON for sectors).
+            available_tickers: Ticker names extracted from the strategy tree.
+        """
+        import json
+
+        warnings: list[str] = []
+        raw = params.get("sectors")
+        if raw is None or (isinstance(raw, str) and not raw.strip()):
+            return warnings  # will use DEFAULT_SECTORS, no warning
+        # Parse JSON string (what GUI sends)
+        sectors: list[str] = []
+        if isinstance(raw, str):
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, list):
+                    sectors = [str(t).upper().strip() for t in parsed if str(t).strip()]
+            except Exception:
+                warnings.append(f"RegimeRotation: sectors '{raw}' is not valid JSON — ignored")
+                return warnings
+        elif isinstance(raw, list):
+            sectors = [str(t).upper().strip() for t in raw if str(t).strip()]
+        else:
+            warnings.append(f"RegimeRotation: sectors has unexpected type {type(raw).__name__}")
+            return warnings
+
+        if not sectors:
+            warnings.append("RegimeRotation: sectors list is empty — will use default sectors")
+            return warnings
+
+        avail_set = {t.upper() for t in available_tickers}
+        missing = [t for t in sectors if t not in avail_set]
+        for t in missing:
+            warnings.append(f"RegimeRotation: '{t}' not in tree — add it as a Security child to use it")
+        return warnings

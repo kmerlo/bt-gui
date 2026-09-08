@@ -6,4 +6,10 @@ export type AlgoSchema = { title: string; type: string; properties: Record<strin
 export const algosApi = {
   list: () => request<AlgoMeta[]>('/api/bt/algos'),
   schema: (name: string) => request<AlgoSchema>(`/api/bt/algos/${encodeURIComponent(name)}/schema`),
+  validate: (name: string, params: Record<string, unknown>, tickers?: string[]) =>
+    request<string[]>(`/api/bt/algos/${encodeURIComponent(name)}/validate`, {
+      method: 'POST',
+      body: JSON.stringify({ params, available_tickers: tickers ?? [] }),
+    }),
 }
+

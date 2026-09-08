@@ -6,6 +6,7 @@ import { algosApi, dataApi, type AlgoMeta, type AlgoSchema, type DataSourceRow }
 import Tooltip from './Tooltip'
 import { createPortal } from 'react-dom'
 import { useBtStore, findNode } from '../store/btStore'
+import { collectTickers } from '../utils/collectTickers'
 import type { AlgoConfig } from '../../types/bt'
 
 const S = {
@@ -15,6 +16,7 @@ const S = {
   btn: { background: '#238636', color: '#fff', border: '1px solid #30363d', borderRadius: 6, padding: '6px 10px', cursor: 'pointer' },
   item: { border: '1px solid #30363d', borderRadius: 8, background: '#161b22', padding: 8, display: 'flex', flexDirection: 'column' as const, gap: 6 },
   warn: { background: '#332a00', border: '1px solid #d29922', color: '#f0c040', borderRadius: 6, padding: '6px 8px', fontSize: 12 },
+  warnRed: { background: '#3d1f1f', border: '1px solid #f85149', color: '#ff7b72', borderRadius: 6, padding: '6px 8px', fontSize: 12 },
   input: { background: '#0d1117', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, padding: '4px 6px', width: '100%' },
   label: { fontSize: 12, color: '#8b949e', cursor: 'help' },
   defaultBadge: { fontSize: 10, color: '#8b949e', fontStyle: 'italic' as const, opacity: 0.85 },
@@ -25,6 +27,11 @@ const S = {
     background: '#21262d', color: '#8b949e', fontSize: 11, cursor: 'pointer',
     display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
   },
+  checkboxGroup: { display: 'flex', flexDirection: 'column', gap: 3, maxHeight: 180, overflowY: 'auto' as const, border: '1px solid #30363d', borderRadius: 6, padding: '6px 8px', background: '#0d1117' },
+  checkboxRow: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', padding: '1px 0' },
+  checkboxTick: { width: 14, height: 14, accentColor: '#58a6ff' as const },
+  tickPresent: { color: '#3fb950' },
+  tickMissing: { color: '#f85149', textDecoration: 'line-through' },
 }
 
 function AlgoItem({
@@ -35,6 +42,7 @@ function AlgoItem({
   indicatorSources,
   signalSources,
   meta,
+  treeTickers,
 }: {
   algo: AlgoConfig
   idx: number
@@ -43,11 +51,13 @@ function AlgoItem({
   indicatorSources: DataSourceRow[]
   signalSources: DataSourceRow[]
   meta: AlgoMeta | null
+  treeTickers: string[]
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: `${algo.class_name}-${idx}` })
   const style = { transform: CSS.Transform.toString(transform), transition }
   const [schema, setSchema] = useState<AlgoSchema | null>(null)
   const [modalDoc, setModalDoc] = useState<string | null>(null)
+  const [validateWarnings, setValidateWarnings] = useState<string[]>([])
   const isSelectWhere = algo.class_name === 'SelectWhere'
 
   useEffect(() => {
@@ -64,6 +74,24 @@ function AlgoItem({
       alive = false
     }
   }, [algo.class_name])
+
+  // ponytail: validate RegimeRotation.sectors against tree tickers on param change
+  useEffect(() => {
+    if (algo.class_name !== 'RegimeRotation') { setValidateWarnings([]); return }
+    const raw = (algo.params as Record<string, unknown>)?.sectors
+    const sectors = (() => {
+      if (!raw) return []
+      if (Array.isArray(raw)) return (raw as string[]).map((t) => t.toUpperCase())
+      if (typeof raw === 'string') {
+        try { const p = JSON.parse(raw) as unknown; return Array.isArray(p) ? (p as string[]).map((t) => t.toUpperCase()) : [] } catch { return [] }
+      }
+      return []
+    })()
+    if (!sectors.length) { setValidateWarnings([]); return }
+    const avail = new Set(treeTickers.map((t) => t.toUpperCase()))
+    const missing = sectors.filter((t) => !avail.has(t))
+    setValidateWarnings(missing.map((t) => `RegimeRotation: '${t}' not in tree — add it as Security child`))
+  }, [algo.params, algo.class_name, treeTickers])
 
   const docTooltip = meta?.doc ?? ''
 
@@ -110,6 +138,53 @@ function AlgoItem({
                 {defStr !== null && <span style={S.defaultBadge}>default: {defStr}</span>}
               </span>
             )
+            // ponytail: RegimeRotation.sectors → multi-select checkboxes from tree tickers
+            if (k === 'sectors' && algo.class_name === 'RegimeRotation') {
+              const raw = (algo.params as Record<string, unknown>)?.sectors
+              const selected: Set<string> = (() => {
+                if (!raw) return new Set<string>()
+                if (Array.isArray(raw)) return new Set((raw as string[]).map((t) => t.toUpperCase()))
+                if (typeof raw === 'string') {
+                  try { const p = JSON.parse(raw) as unknown; return new Set(Array.isArray(p) ? (p as string[]).map((t) => t.toUpperCase()) : []) } catch { return new Set<string>() }
+                }
+                return new Set<string>()
+              })()
+              const availSet = new Set(treeTickers.map((t) => t.toUpperCase()))
+              return (
+                <div key={k} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {labelEl}
+                  <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 3, maxHeight: 180, overflowY: 'auto' as const, border: '1px solid #30363d', borderRadius: 6, padding: '6px 8px', background: '#0d1117' }}>
+                    {treeTickers.map((ticker) => {
+                      const up = ticker.toUpperCase()
+                      const checked = selected.has(up)
+                      const available = availSet.has(up)
+                      return (
+                        <label key={up} style={S.checkboxRow}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={!available}
+                            onChange={(e) => {
+                              const next = new Set(selected)
+                              if (e.target.checked) next.add(up)
+                              else next.delete(up)
+                              onUpdate({ [k]: JSON.stringify([...next]) })
+                            }}
+                            style={S.checkboxTick}
+                          />
+                          <span style={available ? S.tickPresent : S.tickMissing}>{up}</span>
+                          {!available && <span style={{ fontSize: 10, color: '#f85149' }}>(not in tree)</span>}
+                        </label>
+                      )
+                    })}
+                    {treeTickers.length === 0 && <span style={{ fontSize: 11, color: '#8b949e' }}>nessun Security nel tree</span>}
+                  </div>
+                  {validateWarnings.length > 0 && validateWarnings.map((w, i) => (
+                    <div key={i} style={S.warnRed}>{w}</div>
+                  ))}
+                </div>
+              )
+            }
             // indicator ref → render select with available indicators
             if ((pmeta as Record<string, unknown>).kind === 'indicator') {
               // ponytail: SelectWhere.signal è un indicatore puro, nessuna condizione
@@ -256,6 +331,8 @@ export default function AlgoStack({ nodeId }: { nodeId: string }) {
   const updateNode = useBtStore((s) => s.updateNode)
   const node = tree ? findNode(tree.root, nodeId) : null
   const algos: AlgoConfig[] = (node?.algos as AlgoConfig[]) ?? []
+  // ponytail: extract all Security tickers from tree for RegimeRotation.sectors dropdown
+  const allTickers = useMemo(() => tree ? [...new Set(collectTickers(tree.root))] : [], [tree])
 
   const [metas, setMetas] = useState<AlgoMeta[]>([])
   const [sel, setSel] = useState('RunMonthly')
@@ -393,7 +470,7 @@ export default function AlgoStack({ nodeId }: { nodeId: string }) {
           <SortableContext items={algos.map((a, i) => `${a.class_name}-${i}`)} strategy={verticalListSortingStrategy}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {algos.map((a, i) => (
-                <AlgoItem key={`${a.class_name}-${i}`} algo={a} idx={i} onRemove={() => removeAt(i)} onUpdate={(p) => updateAt(i, p)} indicatorSources={indicatorSources} signalSources={signalSources} meta={metas.find((m) => m.name === a.class_name) ?? null} />
+                <AlgoItem key={`${a.class_name}-${i}`} algo={a} idx={i} onRemove={() => removeAt(i)} onUpdate={(p) => updateAt(i, p)} indicatorSources={indicatorSources} signalSources={signalSources} meta={metas.find((m) => m.name === a.class_name) ?? null} treeTickers={allTickers} />
               ))}
             </div>
           </SortableContext>

@@ -163,3 +163,32 @@ class TestRegimeRotationEndToEnd:
         b.run()
         tx = b.strategy.get_transactions()
         assert not tx.empty, "expected some transactions"
+
+
+class TestRegimeRotationValidate:
+    def test_missing_ticker_warns(self):
+        w = RegimeRotation.validate_params({"sectors": '["GLD"]'}, ["SPY", "XLE"])
+        assert len(w) == 1
+        assert "GLD" in w[0]
+
+    def test_all_present_no_warn(self):
+        w = RegimeRotation.validate_params({"sectors": '["SPY","XLE"]'}, ["SPY", "XLE"])
+        assert w == []
+
+    def test_empty_sectors_no_warn(self):
+        w = RegimeRotation.validate_params({"sectors": ""}, ["SPY"])
+        assert w == []
+
+    def test_no_sectors_param_no_warn(self):
+        w = RegimeRotation.validate_params({}, ["SPY"])
+        assert w == []
+
+    def test_invalid_json_warns(self):
+        w = RegimeRotation.validate_params({"sectors": "not-json"}, ["SPY"])
+        assert len(w) == 1
+        assert "not valid JSON" in w[0].lower()
+
+    def test_list_param_parsing(self):
+        w = RegimeRotation.validate_params({"sectors": ["GLD", "SLV"]}, ["SPY"])
+        assert len(w) == 2
+        assert all("not in tree" in x for x in w)
