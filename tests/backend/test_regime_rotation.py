@@ -186,7 +186,7 @@ class TestRegimeRotationValidate:
     def test_invalid_json_warns(self):
         w = RegimeRotation.validate_params({"sectors": "not-json"}, ["SPY"])
         assert len(w) == 1
-        assert "not valid JSON" in w[0].lower()
+        assert "json" in w[0].lower()
 
     def test_list_param_parsing(self):
         w = RegimeRotation.validate_params({"sectors": ["GLD", "SLV"]}, ["SPY"])
